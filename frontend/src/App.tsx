@@ -4,15 +4,12 @@ import * as api from "./api";
 
 type Tab = "flashcards" | "chat" | "quiz";
 
-/** SM-2 quality scale (0–5), shown as tooltips on rating buttons */
-const SM2_QUALITY_HINT: Record<number, string> = {
-  0: "Complete blackout",
-  1: "Incorrect; remembered the correct one",
-  2: "Incorrect; correct answer felt familiar",
-  3: "Correct with serious difficulty",
-  4: "Correct with hesitation",
-  5: "Perfect response",
-};
+const FLASHCARD_RATINGS: { rating: api.FlashcardRating; label: string; title: string }[] = [
+  { rating: "again", label: "Again (10 minutes)", title: "Forgot or very hard — review again in 10 minutes" },
+  { rating: "hard", label: "Hard", title: "Recalled with difficulty (SM-2: harder interval)" },
+  { rating: "good", label: "Good", title: "Recalled with effort — default schedule" },
+  { rating: "easy", label: "Easy", title: "Recalled easily — longer interval" },
+];
 
 function buildSm2DueQueue(cards: FlashcardT[]): FlashcardT[] {
   const now = Date.now();
@@ -219,12 +216,12 @@ function FlashcardsPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [section]);
 
-  const submitSm2Quality = async (quality: number) => {
+  const submitFlashcardRating = async (rating: api.FlashcardRating) => {
     if (!reviewCard) return;
     setBusy(true);
     onError(null);
     try {
-      await api.reviewFlashcard(docId, reviewCard.id, quality);
+      await api.reviewFlashcard(docId, reviewCard.id, rating);
       setFlipped(false);
       await load();
     } catch (e) {
@@ -320,8 +317,8 @@ function FlashcardsPanel({
           ) : !reviewCard ? (
             <div className="review-wrap">
               <p className="empty-hint" style={{ marginBottom: "0.75rem" }}>
-                <strong>SuperMemo-2 (SM-2):</strong> nothing is due right now. Ratings (0–5) schedule the next review; quality
-                below 3 resets the card.
+                <strong>SuperMemo-2 (SM-2):</strong> nothing is due right now. Use Again / Hard / Good / Easy when cards are
+                due — Again reschedules in 10 minutes.
               </p>
               {nextDueLater && (
                 <p className="review-progress">
@@ -332,8 +329,9 @@ function FlashcardsPanel({
           ) : (
             <div className="review-wrap">
               <p className="empty-hint" style={{ marginBottom: "0.75rem" }}>
-                Reviews use the <strong>SM-2</strong> algorithm. Recall the answer, flip to check, then rate recall quality
-                (0 = blackout, 5 = perfect). Queue: {dueQueue.length} due now.
+                Reviews use <strong>SM-2</strong> with four grades. Recall the answer, flip to check, then pick{" "}
+                <strong>Again</strong> (10 min), <strong>Hard</strong>, <strong>Good</strong>, or <strong>Easy</strong>. Queue:{" "}
+                {dueQueue.length} due now.
               </p>
               <div className="review-meta">
                 <span className="review-progress">
@@ -367,7 +365,7 @@ function FlashcardsPanel({
                   </div>
                 </div>
               </div>
-              <p className="review-hint">Click the card or press Space to flip · then rate your recall (SM-2)</p>
+              <p className="review-hint">Click the card or press Space to flip · then choose Again, Hard, Good, or Easy</p>
               <div className="review-nav">
                 <button type="button" className="btn btn-primary btn-wide" onClick={() => setFlipped((f) => !f)}>
                   {flipped ? "Show front" : "Show answer"}
@@ -375,23 +373,23 @@ function FlashcardsPanel({
               </div>
               {flipped && (
                 <div className="sm2-quality">
-                  <div className="field-label">How well did you recall? (0–5)</div>
+                  <div className="field-label">How well did you recall?</div>
                   <div className="sm2-quality-grid">
-                    {[0, 1, 2, 3, 4, 5].map((q) => (
+                    {FLASHCARD_RATINGS.map(({ rating, label, title }) => (
                       <button
-                        key={q}
+                        key={rating}
                         type="button"
-                        className="btn sm2-q"
-                        title={SM2_QUALITY_HINT[q]}
-                        onClick={() => submitSm2Quality(q)}
+                        className={`btn sm2-q sm2-q-${rating}`}
+                        title={title}
+                        onClick={() => submitFlashcardRating(rating)}
                         disabled={busy}
                       >
-                        {q}
+                        {label}
                       </button>
                     ))}
                   </div>
                   <p className="sm2-quality-legend empty-hint">
-                    0–2 = failed (review soon); 3–5 = success (interval grows per SM-2)
+                    Again = back in 10 minutes; Hard / Good / Easy follow SM-2 spacing (Easy = longest interval).
                   </p>
                 </div>
               )}

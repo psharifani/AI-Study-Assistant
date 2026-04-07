@@ -10,7 +10,7 @@ from config import UPLOADS_DIR, get_openai_credentials
 from database import get_session, init_db
 from document_extract import extract_text_from_file
 from llm_service import chat_about_document, generate_flashcards, generate_quiz, grade_short_answer
-from sm2 import apply_sm2_review
+from sm2 import apply_four_button_review
 from models import ChatMessage, Document, Flashcard
 from schemas import (
     ChatRequest,
@@ -185,12 +185,15 @@ async def review_flashcard(
     fc = await session.get(Flashcard, fc_id)
     if not fc or fc.document_id != doc_id:
         raise HTTPException(404, "Flashcard not found")
-    state, next_at = apply_sm2_review(
-        body.quality,
-        fc.sm2_ease_factor,
-        fc.sm2_interval_days,
-        fc.sm2_repetitions,
-    )
+    try:
+        state, next_at = apply_four_button_review(
+            body.rating,
+            fc.sm2_ease_factor,
+            fc.sm2_interval_days,
+            fc.sm2_repetitions,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     fc.sm2_ease_factor = state.ease_factor
     fc.sm2_interval_days = state.interval_days
     fc.sm2_repetitions = state.repetitions

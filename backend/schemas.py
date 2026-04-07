@@ -30,7 +30,10 @@ class FlashcardOut(BaseModel):
 
 
 class FlashcardReviewBody(BaseModel):
-    quality: int = Field(..., ge=0, le=5, description="SM-2 quality: 0=blackout … 5=perfect")
+    rating: Literal["again", "hard", "good", "easy"] = Field(
+        ...,
+        description="again=10m reschedule; hard/good/easy map to SM-2 qualities 3/4/5",
+    )
 
 
 class FlashcardCreate(BaseModel):

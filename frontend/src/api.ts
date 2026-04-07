@@ -125,13 +125,18 @@ export async function updateFlashcard(
   );
 }
 
-/** SuperMemo-2 quality: 0 = blackout … 5 = perfect recall */
-export async function reviewFlashcard(docId: number, fcId: number, quality: number): Promise<Flashcard> {
+export type FlashcardRating = "again" | "hard" | "good" | "easy";
+
+export async function reviewFlashcard(
+  docId: number,
+  fcId: number,
+  rating: FlashcardRating
+): Promise<Flashcard> {
   return handle(
     await fetch(`${API}/documents/${docId}/flashcards/${fcId}/review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quality }),
+      body: JSON.stringify({ rating }),
     })
   );
 }

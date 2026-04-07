@@ -1,9 +1,11 @@
 """
 SuperMemo-2 (SM-2) spaced repetition.
 
-Quality q is 0–5 (0 = complete blackout, 5 = perfect response).
-If q < 3 the card is treated as failed: repetitions reset, next review in 1 day.
-If q >= 3 the interval follows the SM-2 schedule and ease factor is updated.
+Numeric quality q is 0–5 for the classic formula (q < 3 = lapse; next interval 1 day).
+
+The UI uses four buttons mapped to SM-2:
+- again: lapse in 10 minutes (repetitions reset, ease slightly reduced)
+- hard / good / easy: SM-2 qualities 3 / 4 / 5
 """
 
 from __future__ import annotations
@@ -62,3 +64,34 @@ def apply_sm2_review(
     state = next_sm2_state(quality, ease_factor, interval_days, repetitions)
     next_at = datetime.now(timezone.utc) + timedelta(days=state.interval_days)
     return state, next_at
+
+
+AGAIN_MINUTES = 10
+
+
+def apply_four_button_review(
+    rating: str,
+    ease_factor: float,
+    interval_days: float,
+    repetitions: int,
+) -> tuple[SM2State, datetime]:
+    """
+    Map UI ratings to SM-2-style updates.
+    - again: lapse; next review in 10 minutes; repetitions reset; ease reduced slightly
+    - hard / good / easy: SM-2 qualities 3 / 4 / 5
+    """
+    now = datetime.now(timezone.utc)
+    r = rating.strip().lower()
+    ef = ease_factor if ease_factor >= 1.3 else 1.3
+
+    if r == "again":
+        new_ef = max(1.3, ef - 0.2)
+        state = SM2State(ease_factor=new_ef, interval_days=1.0, repetitions=0)
+        return state, now + timedelta(minutes=AGAIN_MINUTES)
+    if r == "hard":
+        return apply_sm2_review(3, ease_factor, interval_days, repetitions)
+    if r == "good":
+        return apply_sm2_review(4, ease_factor, interval_days, repetitions)
+    if r == "easy":
+        return apply_sm2_review(5, ease_factor, interval_days, repetitions)
+    raise ValueError(f"Unknown rating: {rating!r}")

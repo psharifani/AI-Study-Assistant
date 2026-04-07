@@ -268,14 +268,26 @@ a {
 .sm2-quality-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.5rem;
   margin-top: 0.5rem;
 }
 
 .btn.sm2-q {
-  min-width: 2.75rem;
+  flex: 1 1 140px;
+  min-width: min(100%, 140px);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+  justify-content: center;
+}
+
+.btn.sm2-q-again {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+
+.btn.sm2-q-again:hover:not(:disabled) {
+  background: rgba(224, 122, 122, 0.12);
 }
 
 .sm2-quality-legend {
