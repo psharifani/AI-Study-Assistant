@@ -681,6 +681,11 @@ function FlashcardsPanel({
               {cards.map((c) => (
                 <div key={c.id} className="flash-card">
                   <FlashcardMetaLine card={c} />
+                  {c.source_document_name?.trim() ? (
+                    <p className="flashcard-source">
+                      <span className="flashcard-source-label">Source</span> {c.source_document_name.trim()}
+                    </p>
+                  ) : null}
                   {editing === c.id ? (
                     <>
                       <div className="label">Front</div>

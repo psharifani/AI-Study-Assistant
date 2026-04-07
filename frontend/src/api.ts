@@ -23,6 +23,8 @@ export type Flashcard = {
   sm2_interval_days?: number;
   sm2_repetitions?: number;
   sm2_next_review_at?: string | null;
+  /** Present when the card was created via "Generate from document" */
+  source_document_name?: string | null;
 };
 
 export type ChatMessage = {

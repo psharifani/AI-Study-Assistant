@@ -109,6 +109,13 @@ def _migrate_chat_messages_document_id_sync(connection) -> None:
     )
 
 
+def _migrate_flashcards_source_document_sync(connection) -> None:
+    r = connection.execute(text("PRAGMA table_info(flashcards)"))
+    cols = {row[1] for row in r.fetchall()}
+    if "source_document_name" not in cols:
+        connection.execute(text("ALTER TABLE flashcards ADD COLUMN source_document_name VARCHAR(512)"))
+
+
 async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -118,6 +125,7 @@ async def init_db():
         await conn.run_sync(_migrate_documents_name_sync)
         await conn.run_sync(_migrate_chat_sessions_sync)
         await conn.run_sync(_migrate_chat_messages_document_id_sync)
+        await conn.run_sync(_migrate_flashcards_source_document_sync)
 
 
 async def get_session():

@@ -413,6 +413,25 @@ label.upload-btn input[type="file"] {
   border-bottom: 1px solid var(--border);
 }
 
+.flashcard-source {
+  margin: -0.35rem 0 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.flashcard-source-label {
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.68rem;
+}
+
 .review-progress {
   font-size: 0.875rem;
   color: var(--muted);

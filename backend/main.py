@@ -227,6 +227,7 @@ async def generate_flashcards_route(deck_id: int, session: AsyncSession = Depend
     r = await session.execute(select(Flashcard).where(Flashcard.document_id == deck_id))
     existing = list(r.scalars().all())
     base_order = max((f.sort_order for f in existing), default=-1) + 1
+    src_name = (doc.filename or "").strip() or None
     for i, c in enumerate(cards):
         session.add(
             Flashcard(
@@ -234,6 +235,7 @@ async def generate_flashcards_route(deck_id: int, session: AsyncSession = Depend
                 front=c["front"],
                 back=c["back"],
                 sort_order=base_order + i,
+                source_document_name=src_name,
             )
         )
     await session.commit()

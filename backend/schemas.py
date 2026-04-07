@@ -35,6 +35,7 @@ class FlashcardOut(BaseModel):
     sm2_interval_days: float = 0.0
     sm2_repetitions: int = 0
     sm2_next_review_at: datetime | None = None
+    source_document_name: str | None = None
 
     class Config:
         from_attributes = True

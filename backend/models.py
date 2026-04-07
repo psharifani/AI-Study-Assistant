@@ -42,6 +42,8 @@ class Flashcard(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Set when the card is created via "Generate from document" (snapshot of filename at generation time).
+    source_document_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     document: Mapped["Document"] = relationship("Document", back_populates="flashcards")
 
