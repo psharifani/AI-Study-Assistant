@@ -49,6 +49,12 @@ async def generate_flashcards(document_text: str, max_cards: int = 25) -> list[d
     client, model = _openai()
     prompt = f"""From the study document below, create up to {max_cards} high-quality flashcards.
 Each flashcard should target: key concepts, important definitions, or likely exam/review questions.
+
+Layout rules (important for glossaries and two-column PDFs):
+- Text may list the LEFT column first, then the RIGHT column on each page (or a single column).
+- Within one column, reading order is top to bottom. A short title or term is followed by its longer definition directly below it.
+- Do NOT pair a term with text that only sits beside it in another column; only pair with text that follows it in the same column block.
+
 Return ONLY a JSON array of objects with keys "front" and "back" (strings). No markdown fences.
 
 STUDY DOCUMENT:
@@ -144,6 +150,8 @@ async def generate_quiz(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     client, model = _openai()
     prompt = f"""Create a mock test from the study document only.
+
+The document may use two columns per page: content is ordered left column (top to bottom), then right column. Do not mix facts from unrelated side-by-side entries.
 
 Requirements:
 - Exactly {num_mc} multiple-choice questions: 4 options each, exactly one correct.
