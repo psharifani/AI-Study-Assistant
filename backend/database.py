@@ -90,6 +90,25 @@ def _migrate_chat_sessions_sync(connection) -> None:
             pass
 
 
+def _migrate_chat_messages_document_id_sync(connection) -> None:
+    """If chat_messages has session_id but no document_id (stricter migration), backfill from chat_sessions."""
+    r = connection.execute(text("PRAGMA table_info(chat_messages)"))
+    cols = {row[1] for row in r.fetchall()}
+    if "document_id" in cols:
+        return
+    connection.execute(
+        text("ALTER TABLE chat_messages ADD COLUMN document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE")
+    )
+    connection.execute(
+        text("""
+        UPDATE chat_messages SET document_id = (
+            SELECT cs.document_id FROM chat_sessions cs WHERE cs.id = chat_messages.session_id
+        )
+        WHERE document_id IS NULL
+        """)
+    )
+
+
 async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -98,6 +117,7 @@ async def init_db():
         await conn.run_sync(_migrate_flashcards_sm2_sync)
         await conn.run_sync(_migrate_documents_name_sync)
         await conn.run_sync(_migrate_chat_sessions_sync)
+        await conn.run_sync(_migrate_chat_messages_document_id_sync)
 
 
 async def get_session():

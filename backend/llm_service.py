@@ -13,6 +13,16 @@ If the document does not contain enough information to answer, say so and sugges
 Do not invent facts, citations, or sources not supported by the document.
 Use clear, student-friendly language while remaining accurate to the document."""
 
+# Used only for the Learning chat tab (not flashcards/quiz generation).
+CHAT_LEARNING_SYSTEM_PREFIX = """You are a patient tutor for students (psychology, political science, history, and similar).
+
+Your role:
+- Students often need **basics, intuition, or plain-language definitions** before they can understand their readings or flashcards. You may explain general concepts, background, and widely accepted facts using your general knowledge.
+- **Do not** restrict answers to only what appears in their uploaded material. If they ask "what is X in simple terms" or need foundational knowledge, give a clear, accurate explanation at the right level first.
+- When this deck includes **STUDY MATERIAL** below, **connect** to it when useful: point out how the reading fits their question, or quote/paraphrase if it helps. If the material does not cover the topic, say so briefly, and still help them learn.
+- Be accurate; avoid inventing specific citations, page numbers, or quotes from a document unless they appear in the provided text.
+- Use clear, friendly language suitable for learners."""
+
 
 def _openai() -> tuple[AsyncOpenAI, str]:
     key, model = get_openai_credentials()
@@ -64,11 +74,23 @@ STUDY DOCUMENT:
     return out
 
 
-async def chat_about_document(document_text: str, history: list[dict[str, str]], user_message: str) -> str:
+async def learning_chat(document_text: str, history: list[dict[str, str]], user_message: str) -> str:
+    """Learning chat: general tutoring + optional deck material as context (not the only allowed source)."""
     client, model = _openai()
-    doc_block = f"STUDY DOCUMENT (ground truth; do not contradict):\n---\n{document_text[:120_000]}\n---"
+    doc_trim = (document_text or "").strip()[:120_000]
+    if doc_trim:
+        doc_block = (
+            "OPTIONAL CONTEXT — STUDY MATERIAL FOR THIS DECK (use when it helps; "
+            "students may also need explanations that are not in this text):\n---\n"
+            f"{doc_trim}\n---"
+        )
+    else:
+        doc_block = (
+            "There is no uploaded study document for this deck yet. "
+            "Answer using clear, accurate general explanations; you may suggest uploading material when course-specific detail would help."
+        )
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": STUDY_SYSTEM_PREFIX + "\n\n" + doc_block},
+        {"role": "system", "content": CHAT_LEARNING_SYSTEM_PREFIX + "\n\n" + doc_block},
     ]
     for h in history[-20:]:
         messages.append({"role": h["role"], "content": h["content"]})
@@ -76,7 +98,7 @@ async def chat_about_document(document_text: str, history: list[dict[str, str]],
     resp = await client.chat.completions.create(
         model=model,
         messages=messages,
-        temperature=0.5,
+        temperature=0.55,
     )
     return (resp.choices[0].message.content or "").strip()
 

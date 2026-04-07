@@ -11,10 +11,10 @@ from config import UPLOADS_DIR, get_openai_credentials
 from database import get_session, init_db
 from document_extract import extract_text_from_file
 from llm_service import (
-    chat_about_document,
     generate_flashcards,
     generate_quiz,
     grade_short_answer,
+    learning_chat,
     suggest_chat_session_title,
 )
 from models import ChatMessage, ChatSession, Document, Flashcard
@@ -347,14 +347,12 @@ async def post_chat_message(
     doc = await session.get(Document, deck_id)
     if not doc:
         raise HTTPException(404, "Deck not found")
-    if not doc.content_text.strip():
-        raise HTTPException(400, "Deck has no study material — upload a document first")
 
     cs = await session.get(ChatSession, session_id)
     if not cs or cs.document_id != deck_id:
         raise HTTPException(404, "Chat session not found")
 
-    user_msg = ChatMessage(session_id=session_id, role="user", content=body.message)
+    user_msg = ChatMessage(session_id=session_id, document_id=deck_id, role="user", content=body.message)
     session.add(user_msg)
     await session.commit()
 
@@ -365,7 +363,7 @@ async def post_chat_message(
     history = [{"role": m.role, "content": m.content} for m in history_rows[:-1]]
 
     try:
-        reply = await chat_about_document(doc.content_text, history, body.message)
+        reply = await learning_chat(doc.content_text or "", history, body.message)
     except RuntimeError as e:
         raise HTTPException(503, str(e)) from e
     except Exception as e:
@@ -380,7 +378,7 @@ async def post_chat_message(
             preview = body.message.strip().replace("\n", " ")
             cs.title = (preview[:80] + "…") if len(preview) > 80 else preview or "Chat"
 
-    asst = ChatMessage(session_id=session_id, role="assistant", content=reply)
+    asst = ChatMessage(session_id=session_id, document_id=deck_id, role="assistant", content=reply)
     session.add(asst)
     await session.commit()
     await session.refresh(asst)

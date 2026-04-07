@@ -74,6 +74,10 @@ class ChatMessage(Base):
     session_id: Mapped[int] = mapped_column(
         ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False
     )
+    # Kept for legacy SQLite rows / NOT NULL schema; always matches the session's deck.
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

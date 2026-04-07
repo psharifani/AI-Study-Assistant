@@ -759,7 +759,7 @@ function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
     <div className="panel chat-panel-outer">
       <h2>Learning chat</h2>
       <p className="empty-hint" style={{ marginBottom: "1rem" }}>
-        Ask for simpler explanations, summaries, definitions, or how theories in your document relate. Replies are limited to your uploaded material.
+        Ask for basics, simple definitions, or deeper explanations at any level. The tutor can use general knowledge to help you understand; your uploaded material is optional context when you want ties to your reading.
       </p>
       {loading ? (
         <p className="empty-hint">Loading…</p>
@@ -794,7 +794,7 @@ function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
               <>
                 <div className="chat-log">
                   {msgs.length === 0 && (
-                    <p className="empty-hint">No messages yet. Ask a question about your document.</p>
+                    <p className="empty-hint">No messages yet. Ask anything you&apos;re studying—simple definitions, or how your reading fits together.</p>
                   )}
                   {msgs.map((m) => (
                     <div key={m.id} className={`chat-bubble ${m.role === "user" ? "user" : "assistant"}`}>
