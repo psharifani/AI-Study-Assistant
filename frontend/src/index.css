@@ -617,6 +617,40 @@ label.upload-btn input[type="file"] {
   background: transparent;
 }
 
+.flash-study-doc {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.flash-study-doc-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.flash-remove-doc {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.flash-study-doc-name {
+  margin: 0.35rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.flash-generate-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;

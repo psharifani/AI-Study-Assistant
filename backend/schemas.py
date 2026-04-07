@@ -10,6 +10,7 @@ class DeckOut(BaseModel):
     filename: str
     created_at: datetime | None = None
     content_preview: str = ""
+    has_study_material: bool = False
 
     class Config:
         from_attributes = True

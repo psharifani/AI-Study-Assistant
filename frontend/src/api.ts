@@ -6,6 +6,7 @@ export type DeckSummary = {
   filename: string;
   created_at: string | null;
   content_preview: string;
+  has_study_material?: boolean;
 };
 
 /** @deprecated use DeckSummary */
@@ -107,6 +108,10 @@ export async function uploadDeckDocument(deckId: number, file: File): Promise<De
   const fd = new FormData();
   fd.append("file", file);
   return handle(await fetch(`${API}/decks/${deckId}/document`, { method: "POST", body: fd }));
+}
+
+export async function removeDeckDocument(deckId: number): Promise<DeckSummary> {
+  return handle(await fetch(`${API}/decks/${deckId}/document`, { method: "DELETE" }));
 }
 
 export async function deleteDeck(id: number): Promise<void> {

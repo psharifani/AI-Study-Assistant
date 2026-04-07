@@ -60,12 +60,14 @@ def _deck_out(d: Document) -> DeckOut:
         nm = Path(fn).stem if fn else "Untitled deck"
     if not nm:
         nm = "Untitled deck"
+    body = (d.content_text or "").strip()
     return DeckOut(
         id=d.id,
         name=nm,
         filename=fn,
         created_at=d.created_at,
         content_preview=preview + ("…" if len(d.content_text or "") > 280 else ""),
+        has_study_material=bool(body),
     )
 
 
@@ -141,6 +143,26 @@ async def upload_deck_document(
     stem = Path(safe_name).stem
     if not (doc.name or "").strip():
         doc.name = stem
+    await session.commit()
+    await session.refresh(doc)
+    return _deck_out(doc)
+
+
+@app.delete("/api/decks/{deck_id}/document", response_model=DeckOut)
+async def remove_deck_document(deck_id: int, session: AsyncSession = Depends(get_session)):
+    doc = await session.get(Document, deck_id)
+    if not doc:
+        raise HTTPException(404, "Deck not found")
+    if doc.stored_path:
+        p = Path(doc.stored_path)
+        if p.is_file():
+            try:
+                p.unlink()
+            except OSError:
+                pass
+    doc.stored_path = None
+    doc.filename = ""
+    doc.content_text = ""
     await session.commit()
     await session.refresh(doc)
     return _deck_out(doc)

@@ -212,6 +212,27 @@ export default function App() {
     }
   };
 
+  const onRemoveDeckDocument = async () => {
+    if (deckId == null) return;
+    if (
+      !confirm(
+        "Remove the uploaded document from this deck? The file will be deleted from storage. Existing flashcards stay in the deck."
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.removeDeckDocument(deckId);
+      await refreshDecks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove document");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onDeleteDeck = async () => {
     if (!deckId) return;
     if (!confirm("Delete this deck and all flashcards and chat in it?")) return;
@@ -309,7 +330,16 @@ export default function App() {
             </button>
           </nav>
 
-          {tab === "flashcards" && <FlashcardsPanel deckId={deckId} onError={setError} />}
+          {tab === "flashcards" && (
+            <FlashcardsPanel
+              deckId={deckId}
+              onError={setError}
+              studyFilename={currentDeck?.filename ?? ""}
+              hasStudyMaterial={currentDeck?.has_study_material ?? false}
+              onRemoveDocument={() => void onRemoveDeckDocument()}
+              documentBusy={busy}
+            />
+          )}
           {tab === "chat" && <ChatPanel deckId={deckId} onError={setError} />}
           {tab === "quiz" && <QuizPanel deckId={deckId} onError={setError} />}
         </>
@@ -321,9 +351,17 @@ export default function App() {
 function FlashcardsPanel({
   deckId,
   onError,
+  studyFilename,
+  hasStudyMaterial,
+  onRemoveDocument,
+  documentBusy,
 }: {
   deckId: number;
   onError: (s: string | null) => void;
+  studyFilename: string;
+  hasStudyMaterial: boolean;
+  onRemoveDocument: () => void;
+  documentBusy: boolean;
 }) {
   const [section, setSection] = useState<"review" | "manage">("review");
   const [cards, setCards] = useState<FlashcardT[]>([]);
@@ -580,8 +618,32 @@ function FlashcardsPanel({
 
       {section === "manage" && (
         <>
+          <div className="flash-study-doc">
+            <div className="flash-study-doc-header">
+              <span className="field-label">Study document</span>
+              {hasStudyMaterial && (
+                <button
+                  type="button"
+                  className="btn btn-danger flash-remove-doc"
+                  onClick={onRemoveDocument}
+                  disabled={documentBusy || busy || loading}
+                >
+                  Remove document
+                </button>
+              )}
+            </div>
+            <p className={`flash-study-doc-name ${studyFilename.trim() ? "" : "empty-hint"}`}>
+              {studyFilename.trim() ? studyFilename.trim() : "No document uploaded yet — use Upload / replace material above."}
+            </p>
+          </div>
           <div className="toolbar">
-            <button type="button" className="btn btn-primary" onClick={gen} disabled={busy || loading}>
+            <button
+              type="button"
+              className={hasStudyMaterial ? "btn btn-primary" : "btn flash-generate-disabled"}
+              onClick={() => void gen()}
+              disabled={!hasStudyMaterial || busy || loading}
+              title={!hasStudyMaterial ? "Upload study material first" : undefined}
+            >
               {busy ? "Generating…" : "Generate from document"}
             </button>
           </div>
