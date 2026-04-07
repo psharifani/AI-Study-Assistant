@@ -141,6 +141,124 @@ a {
   border-bottom-color: var(--accent);
 }
 
+.subtabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  margin: -0.25rem 0 1.25rem;
+}
+
+.subtabs button {
+  padding: 0.5rem 0.95rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-bottom: -1px;
+}
+
+.subtabs button:hover {
+  color: var(--text);
+}
+
+.subtabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.review-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.review-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.review-progress {
+  font-size: 0.875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.review-card-outer {
+  perspective: 1200px;
+  min-height: 220px;
+}
+
+.review-card-inner {
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+  transition: transform 0.5s ease;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.review-card-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+.review-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  padding: 1.25rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.review-face.back {
+  transform: rotateY(180deg);
+}
+
+.review-face-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+
+.review-face-text {
+  font-size: 1.05rem;
+  line-height: 1.45;
+  flex: 1;
+}
+
+.review-hint {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.review-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.review-nav .btn-wide {
+  min-width: 7rem;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);

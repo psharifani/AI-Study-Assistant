@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Flashcard as FlashcardT, QuizQuestion, QuizResult } from "./api";
 import * as api from "./api";
 
@@ -125,6 +125,15 @@ export default function App() {
   );
 }
 
+function shuffleIndices(n: number): number[] {
+  const a = Array.from({ length: n }, (_, i) => i);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function FlashcardsPanel({
   docId,
   onError,
@@ -132,6 +141,7 @@ function FlashcardsPanel({
   docId: number;
   onError: (s: string | null) => void;
 }) {
+  const [section, setSection] = useState<"review" | "manage">("review");
   const [cards, setCards] = useState<FlashcardT[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -140,6 +150,10 @@ function FlashcardsPanel({
   const [draftBack, setDraftBack] = useState("");
   const [newFront, setNewFront] = useState("");
   const [newBack, setNewBack] = useState("");
+
+  const [reviewOrder, setReviewOrder] = useState<number[]>([]);
+  const [reviewIdx, setReviewIdx] = useState(0);
+  const [flipped, setFlipped] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,6 +170,57 @@ function FlashcardsPanel({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setReviewOrder(cards.map((_, i) => i));
+    setReviewIdx(0);
+    setFlipped(false);
+  }, [cards]);
+
+  const reviewCard = useMemo(() => {
+    if (!cards.length || !reviewOrder.length) return null;
+    const pos = Math.min(reviewIdx, reviewOrder.length - 1);
+    const cardIdx = reviewOrder[pos];
+    return cards[cardIdx] ?? null;
+  }, [cards, reviewOrder, reviewIdx]);
+
+  const goPrev = () => {
+    setReviewIdx((i) => Math.max(0, i - 1));
+    setFlipped(false);
+  };
+
+  const goNext = () => {
+    setReviewIdx((i) => Math.min(reviewOrder.length - 1, i + 1));
+    setFlipped(false);
+  };
+
+  const doShuffle = () => {
+    setReviewOrder(shuffleIndices(cards.length));
+    setReviewIdx(0);
+    setFlipped(false);
+  };
+
+  useEffect(() => {
+    if (section !== "review") return;
+    const maxIdx = Math.max(0, reviewOrder.length - 1);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        setFlipped((f) => !f);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setReviewIdx((i) => Math.max(0, i - 1));
+        setFlipped(false);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setReviewIdx((i) => Math.min(maxIdx, i + 1));
+        setFlipped(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [section, reviewOrder]);
 
   const gen = async () => {
     setBusy(true);
@@ -223,68 +288,145 @@ function FlashcardsPanel({
   return (
     <div className="panel">
       <h2>Flashcards</h2>
-      <div className="toolbar">
-        <button type="button" className="btn btn-primary" onClick={gen} disabled={busy || loading}>
-          {busy ? "Generating…" : "Generate from document"}
+      <nav className="subtabs" aria-label="Flashcard sections">
+        <button type="button" className={section === "review" ? "active" : ""} onClick={() => setSection("review")}>
+          Review flashcards
         </button>
-      </div>
-      <p className="empty-hint" style={{ marginBottom: "1rem" }}>
-        Cards are saved for this document. Edit or add your own anytime.
-      </p>
-
-      <div style={{ marginBottom: "1.25rem", padding: "1rem", background: "var(--surface2)", borderRadius: 8 }}>
-        <span className="field-label">New flashcard</span>
-        <textarea placeholder="Front (question or term)" value={newFront} onChange={(e) => setNewFront(e.target.value)} />
-        <textarea placeholder="Back (answer or definition)" value={newBack} onChange={(e) => setNewBack(e.target.value)} />
-        <button type="button" className="btn btn-primary" onClick={addManual} disabled={busy}>
-          Add card
+        <button type="button" className={section === "manage" ? "active" : ""} onClick={() => setSection("manage")}>
+          Manage flashcards
         </button>
-      </div>
+      </nav>
 
-      {loading ? (
-        <p className="empty-hint">Loading…</p>
-      ) : cards.length === 0 ? (
-        <p className="empty-hint">No flashcards yet. Generate from your document or add manually.</p>
-      ) : (
-        <div className="flash-list">
-          {cards.map((c) => (
-            <div key={c.id} className="flash-card">
-              {editing === c.id ? (
-                <>
-                  <div className="label">Front</div>
-                  <textarea value={draftFront} onChange={(e) => setDraftFront(e.target.value)} />
-                  <div className="label">Back</div>
-                  <textarea value={draftBack} onChange={(e) => setDraftBack(e.target.value)} />
-                  <div className="actions">
-                    <button type="button" className="btn btn-primary" onClick={saveEdit} disabled={busy}>
-                      Save
-                    </button>
-                    <button type="button" className="btn" onClick={() => setEditing(null)} disabled={busy}>
-                      Cancel
-                    </button>
+      {section === "review" && (
+        <>
+          {loading ? (
+            <p className="empty-hint">Loading…</p>
+          ) : cards.length === 0 ? (
+            <p className="empty-hint">
+              No flashcards yet. Switch to <strong>Manage flashcards</strong> to generate or add cards.
+            </p>
+          ) : (
+            <div className="review-wrap">
+              <div className="review-meta">
+                <span className="review-progress">
+                  Card {reviewIdx + 1} of {reviewOrder.length}
+                </span>
+                <button type="button" className="btn" onClick={doShuffle} disabled={busy}>
+                  Shuffle order
+                </button>
+              </div>
+              <div className="review-card-outer">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className={`review-card-inner ${flipped ? "flipped" : ""}`}
+                  onClick={() => setFlipped((f) => !f)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setFlipped((f) => !f);
+                    }
+                  }}
+                  aria-label={flipped ? "Show question side" : "Show answer side"}
+                >
+                  <div className="review-face front">
+                    <div className="review-face-label">Question / term</div>
+                    <div className="review-face-text">{reviewCard?.front}</div>
                   </div>
-                </>
-              ) : (
-                <>
-                  <div className="label">Front</div>
-                  <div>{c.front}</div>
-                  <div className="label" style={{ marginTop: "0.75rem" }}>
-                    Back
+                  <div className="review-face back">
+                    <div className="review-face-label">Answer</div>
+                    <div className="review-face-text">{reviewCard?.back}</div>
                   </div>
-                  <div>{c.back}</div>
-                  <div className="actions">
-                    <button type="button" className="btn" onClick={() => startEdit(c)} disabled={busy}>
-                      Edit
-                    </button>
-                    <button type="button" className="btn btn-danger" onClick={() => remove(c.id)} disabled={busy}>
-                      Delete
-                    </button>
-                  </div>
-                </>
-              )}
+                </div>
+              </div>
+              <p className="review-hint">Click the card or press Space to flip · ← → to move between cards</p>
+              <div className="review-nav">
+                <button type="button" className="btn btn-wide" onClick={goPrev} disabled={reviewIdx <= 0}>
+                  Previous
+                </button>
+                <button type="button" className="btn btn-primary btn-wide" onClick={() => setFlipped((f) => !f)}>
+                  {flipped ? "Show front" : "Show answer"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-wide"
+                  onClick={goNext}
+                  disabled={reviewIdx >= reviewOrder.length - 1}
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
+      )}
+
+      {section === "manage" && (
+        <>
+          <div className="toolbar">
+            <button type="button" className="btn btn-primary" onClick={gen} disabled={busy || loading}>
+              {busy ? "Generating…" : "Generate from document"}
+            </button>
+          </div>
+          <p className="empty-hint" style={{ marginBottom: "1rem" }}>
+            Cards are saved for this document. Edit or add your own anytime.
+          </p>
+
+          <div style={{ marginBottom: "1.25rem", padding: "1rem", background: "var(--surface2)", borderRadius: 8 }}>
+            <span className="field-label">New flashcard</span>
+            <textarea placeholder="Front (question or term)" value={newFront} onChange={(e) => setNewFront(e.target.value)} />
+            <textarea placeholder="Back (answer or definition)" value={newBack} onChange={(e) => setNewBack(e.target.value)} />
+            <button type="button" className="btn btn-primary" onClick={addManual} disabled={busy}>
+              Add card
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="empty-hint">Loading…</p>
+          ) : cards.length === 0 ? (
+            <p className="empty-hint">No flashcards yet. Generate from your document or add manually.</p>
+          ) : (
+            <div className="flash-list">
+              {cards.map((c) => (
+                <div key={c.id} className="flash-card">
+                  {editing === c.id ? (
+                    <>
+                      <div className="label">Front</div>
+                      <textarea value={draftFront} onChange={(e) => setDraftFront(e.target.value)} />
+                      <div className="label">Back</div>
+                      <textarea value={draftBack} onChange={(e) => setDraftBack(e.target.value)} />
+                      <div className="actions">
+                        <button type="button" className="btn btn-primary" onClick={saveEdit} disabled={busy}>
+                          Save
+                        </button>
+                        <button type="button" className="btn" onClick={() => setEditing(null)} disabled={busy}>
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="label">Front</div>
+                      <div>{c.front}</div>
+                      <div className="label" style={{ marginTop: "0.75rem" }}>
+                        Back
+                      </div>
+                      <div>{c.back}</div>
+                      <div className="actions">
+                        <button type="button" className="btn" onClick={() => startEdit(c)} disabled={busy}>
+                          Edit
+                        </button>
+                        <button type="button" className="btn btn-danger" onClick={() => remove(c.id)} disabled={busy}>
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
