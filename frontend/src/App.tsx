@@ -75,11 +75,13 @@ function DeckPicker({
   busy,
   onCreate,
   onOpen,
+  onRename,
 }: {
   decks: api.DeckSummary[];
   busy: boolean;
   onCreate: (name: string) => Promise<void>;
   onOpen: (id: number) => void;
+  onRename: (id: number, name: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const handleCreate = (e: React.FormEvent) => {
@@ -91,42 +93,60 @@ function DeckPicker({
 
   return (
     <div className="deck-picker">
-      <div className="panel deck-picker-actions deck-panel-tile deck-create-strip">
-        <h2 className="deck-picker-title">Create a deck</h2>
-        <form onSubmit={handleCreate} className="deck-create-form">
-          <input
-            className="doc-select"
-            placeholder="New deck name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={busy}
-            aria-label="New deck name"
-          />
-          <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
-            Create deck
-          </button>
-        </form>
-      </div>
-      <div className="deck-grid">
-        {decks.length === 0 ? (
-          <p className="empty-hint deck-grid-empty">No decks yet. Create one above.</p>
-        ) : (
-          decks.map((d) => (
-            <div key={d.id} className="panel deck-card deck-panel-tile deck-card-strip">
-              <div className="deck-card-name" title={d.name}>
-                {d.name}
+      <div className="deck-cluster-frame">
+        <div className="panel deck-picker-actions deck-panel-tile deck-create-strip">
+          <h2 className="deck-picker-title">Create a deck</h2>
+          <form onSubmit={handleCreate} className="deck-create-form">
+            <input
+              className="doc-select"
+              placeholder="New deck name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={busy}
+              aria-label="New deck name"
+            />
+            <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
+              Create deck
+            </button>
+          </form>
+        </div>
+        <div className="deck-grid">
+          {decks.length === 0 ? (
+            <p className="empty-hint deck-grid-empty">No decks yet. Create one above.</p>
+          ) : (
+            decks.map((d) => (
+              <div key={d.id} className="panel deck-card deck-panel-tile deck-card-strip">
+                <div className="deck-card-head">
+                  <div className="deck-card-name" title={d.name}>
+                    {d.name}
+                  </div>
+                  <button
+                    type="button"
+                    className="deck-card-rename"
+                    disabled={busy}
+                    onClick={() => {
+                      const next = window.prompt("Deck name", d.name);
+                      if (next == null) return;
+                      const t = next.trim();
+                      if (!t || t === d.name) return;
+                      void onRename(d.id, t);
+                    }}
+                  >
+                    Rename
+                  </button>
+                </div>
+                <div className="deck-card-preview empty-hint" title={d.content_preview || undefined}>
+                  {d.content_preview || "No material yet — open to upload."}
+                </div>
+                <div className="deck-card-actions">
+                  <button type="button" className="btn btn-primary" onClick={() => onOpen(d.id)} disabled={busy}>
+                    Open
+                  </button>
+                </div>
               </div>
-              <div className="deck-card-preview empty-hint" title={d.content_preview || undefined}>
-                {d.content_preview || "No material yet — open to upload."}
-              </div>
-              <div className="deck-card-actions">
-                <button type="button" className="btn btn-primary" onClick={() => onOpen(d.id)} disabled={busy}>
-                  Open
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
@@ -268,6 +288,18 @@ export default function App() {
           onOpen={(id) => {
             setDeckId(id);
             setTab("flashcards");
+          }}
+          onRename={async (id, name) => {
+            setBusy(true);
+            setError(null);
+            try {
+              await api.renameDeck(id, name);
+              await refreshDecks();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Could not rename deck");
+            } finally {
+              setBusy(false);
+            }
           }}
         />
       ) : (
@@ -584,32 +616,40 @@ function FlashcardsPanel({
                 Click the card or press Space to reveal the answer · the question stays above · then rate with Again, Hard,
                 Good, or Easy
               </p>
-              <div className="review-nav">
-                <button type="button" className="btn btn-primary btn-wide" onClick={() => setFlipped((f) => !f)}>
-                  {flipped ? "Show front" : "Show answer"}
-                </button>
-              </div>
-              {flipped && (
-                <div className="sm2-quality">
-                  <div className="field-label">How well did you recall?</div>
-                  <div className="sm2-quality-grid">
-                    {FLASHCARD_RATINGS.map(({ rating, label, title }) => (
-                      <button
-                        key={rating}
-                        type="button"
-                        className={`btn sm2-q sm2-q-${rating}`}
-                        title={title}
-                        onClick={() => submitFlashcardRating(rating)}
-                        disabled={busy}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="sm2-quality-legend empty-hint">
-                    Again = back in 10 minutes; Hard / Good / Easy follow SM-2 spacing (Easy = longest interval).
-                  </p>
+              {!flipped ? (
+                <div className="review-nav">
+                  <button type="button" className="btn btn-primary btn-wide" onClick={() => setFlipped((f) => !f)}>
+                    Show answer
+                  </button>
                 </div>
+              ) : (
+                <>
+                  <div className="sm2-quality">
+                    <div className="field-label">How well did you recall?</div>
+                    <div className="sm2-quality-grid">
+                      {FLASHCARD_RATINGS.map(({ rating, label, title }) => (
+                        <button
+                          key={rating}
+                          type="button"
+                          className={`btn sm2-q sm2-q-${rating}`}
+                          title={title}
+                          onClick={() => submitFlashcardRating(rating)}
+                          disabled={busy}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="sm2-quality-legend empty-hint">
+                      Again = back in 10 minutes; Hard / Good / Easy follow SM-2 spacing (Easy = longest interval).
+                    </p>
+                  </div>
+                  <div className="review-nav">
+                    <button type="button" className="btn btn-primary btn-wide" onClick={() => setFlipped((f) => !f)}>
+                      Show front
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}

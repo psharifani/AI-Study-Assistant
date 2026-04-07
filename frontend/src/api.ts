@@ -98,6 +98,16 @@ export async function createDeck(name: string): Promise<DeckSummary> {
   );
 }
 
+export async function renameDeck(deckId: number, name: string): Promise<DeckSummary> {
+  return handle(
+    await fetch(`${API}/decks/${deckId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    })
+  );
+}
+
 /** Create a new deck from an uploaded file (name derived from filename). */
 export async function uploadNewDeck(file: File): Promise<DeckSummary> {
   const fd = new FormData();

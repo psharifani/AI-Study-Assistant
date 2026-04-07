@@ -20,6 +20,10 @@ class DeckCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
 
 
+class DeckRename(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+
+
 # Alias for older code paths
 DocumentOut = DeckOut
 

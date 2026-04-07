@@ -10,8 +10,11 @@
   --success: #6bcb8f;
   --danger: #e07a7a;
   --radius: 10px;
+  --deck-cluster-bg: #2a3545;
+  --deck-cluster-border: #3a4a5e;
   --font: "DM Sans", system-ui, sans-serif;
-  --font-serif: "Source Serif 4", Georgia, serif;
+  --font-display: "Montserrat", "DM Sans", system-ui, sans-serif;
+  --font-geometric: "Poppins", "DM Sans", system-ui, sans-serif;
 }
 
 * {
@@ -59,10 +62,11 @@ a {
 }
 
 .app-header h1 {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 1.65rem;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.85rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
   margin: 0 0 0.35rem;
 }
 
@@ -121,10 +125,22 @@ label.upload-btn input[type="file"] {
 .deck-picker {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
   width: 100%;
   max-width: 22rem;
   margin-inline: auto;
+}
+
+/* Lighter than deck panels (--surface), brighter than page --bg; sits behind cards */
+.deck-cluster-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.1rem 1.15rem;
+  background: var(--deck-cluster-bg);
+  border: 1px solid var(--deck-cluster-border);
+  border-radius: calc(var(--radius) + 4px);
+  box-sizing: border-box;
 }
 
 .deck-picker .panel h2 {
@@ -205,6 +221,54 @@ label.upload-btn input[type="file"] {
   font-size: 1rem;
   line-height: 1.35;
   word-break: break-word;
+}
+
+.deck-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.deck-card-head .deck-card-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.deck-card-rename {
+  flex-shrink: 0;
+  margin: -0.15rem -0.15rem 0 0;
+  padding: 0.3rem 0.55rem;
+  font-family: var(--font-geometric);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(139, 156, 179, 0.42);
+  cursor: pointer;
+  transition:
+    color 0.5s ease,
+    background-color 0.5s ease,
+    opacity 0.35s ease;
+}
+
+.deck-card-rename:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(232, 237, 244, 0.08);
+}
+
+.deck-card-rename:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deck-card-rename:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .deck-card-preview {
@@ -590,6 +654,10 @@ label.upload-btn input[type="file"] {
 .sm2-quality-legend {
   margin: 0.65rem 0 0;
   font-size: 0.8rem;
+}
+
+.sm2-quality + .review-nav {
+  margin-top: 1rem;
 }
 
 .panel {

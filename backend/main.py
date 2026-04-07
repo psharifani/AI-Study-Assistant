@@ -22,6 +22,7 @@ from sm2 import apply_four_button_review
 from schemas import (
     ChatRequest,
     DeckCreate,
+    DeckRename,
     DeckOut,
     FlashcardCreate,
     FlashcardOut,
@@ -179,6 +180,19 @@ async def get_deck(deck_id: int, session: AsyncSession = Depends(get_session)):
     doc = await session.get(Document, deck_id)
     if not doc:
         raise HTTPException(404, "Deck not found")
+    return _deck_out(doc)
+
+
+@app.put("/api/decks/{deck_id}", response_model=DeckOut)
+async def rename_deck(
+    deck_id: int, body: DeckRename, session: AsyncSession = Depends(get_session)
+):
+    doc = await session.get(Document, deck_id)
+    if not doc:
+        raise HTTPException(404, "Deck not found")
+    doc.name = body.name.strip()
+    await session.commit()
+    await session.refresh(doc)
     return _deck_out(doc)
 
 
