@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Flashcard as FlashcardT, QuizQuestion, QuizResult } from "./api";
 import * as api from "./api";
+import { formatAddedDate, formatIntervalDays, formatNextRead } from "./flashcardMeta";
 
 type Tab = "flashcards" | "chat" | "quiz";
 
@@ -29,6 +30,34 @@ function buildSm2DueQueue(cards: FlashcardT[]): FlashcardT[] {
     });
 }
 
+function FlashcardMetaLine({ card }: { card: FlashcardT }) {
+  return (
+    <div className="flashcard-meta">
+      <span>
+        <strong>ID</strong> {card.id}
+      </span>
+      <span className="flashcard-meta-sep" aria-hidden>
+        ·
+      </span>
+      <span>
+        <strong>Added</strong> {formatAddedDate(card.created_at)}
+      </span>
+      <span className="flashcard-meta-sep" aria-hidden>
+        ·
+      </span>
+      <span>
+        <strong>Interval</strong> {formatIntervalDays(card.sm2_interval_days)}
+      </span>
+      <span className="flashcard-meta-sep" aria-hidden>
+        ·
+      </span>
+      <span>
+        <strong>Next read</strong> {formatNextRead(card.sm2_next_review_at)}
+      </span>
+    </div>
+  );
+}
+
 function nextFutureReview(cards: FlashcardT[]): Date | null {
   const now = Date.now();
   const times = cards
@@ -39,41 +68,137 @@ function nextFutureReview(cards: FlashcardT[]): Date | null {
   return new Date(Math.min(...times));
 }
 
+function DeckPicker({
+  decks,
+  busy,
+  onCreate,
+  onUploadNew,
+  onOpen,
+  onDelete,
+}: {
+  decks: api.DeckSummary[];
+  busy: boolean;
+  onCreate: (name: string) => Promise<void>;
+  onUploadNew: (file: File) => Promise<void>;
+  onOpen: (id: number) => void;
+  onDelete: (id: number) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    void onCreate(name.trim());
+    setName("");
+  };
+
+  return (
+    <div className="deck-picker">
+      <div className="panel deck-picker-actions">
+        <h2 className="deck-picker-title">Your decks</h2>
+        <p className="empty-hint deck-picker-lead">
+          Create a deck or upload a file. Open a deck to use flashcards, learning chat, and mock tests for that material.
+        </p>
+        <form onSubmit={handleCreate} className="deck-create-form">
+          <input
+            className="doc-select"
+            placeholder="New deck name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={busy}
+            aria-label="New deck name"
+          />
+          <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
+            Create deck
+          </button>
+        </form>
+        <div className="deck-upload-row">
+          <label className="upload-btn">
+            {busy ? "…" : "Upload file as new deck"}
+            <input
+              type="file"
+              accept=".pdf,.txt,.md,.markdown"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void onUploadNew(f);
+              }}
+              disabled={busy}
+            />
+          </label>
+        </div>
+      </div>
+      <div className="deck-grid">
+        {decks.length === 0 ? (
+          <p className="empty-hint deck-grid-empty">No decks yet. Create one or upload a file.</p>
+        ) : (
+          decks.map((d) => (
+            <div key={d.id} className="deck-card">
+              <div className="deck-card-name">{d.name}</div>
+              <div className="deck-card-preview empty-hint">{d.content_preview || "No study material uploaded yet."}</div>
+              <div className="deck-card-actions">
+                <button type="button" className="btn btn-primary" onClick={() => onOpen(d.id)} disabled={busy}>
+                  Open
+                </button>
+                <button type="button" className="btn btn-danger" onClick={() => void onDelete(d.id)} disabled={busy}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const [docs, setDocs] = useState<api.DocumentSummary[]>([]);
-  const [docId, setDocId] = useState<number | null>(null);
+  const [decks, setDecks] = useState<api.DeckSummary[]>([]);
+  const [deckId, setDeckId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("flashcards");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const refreshDocs = useCallback(async () => {
+  const currentDeck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
+
+  const refreshDecks = useCallback(async () => {
     try {
       setError(null);
-      const list = await api.fetchDocuments();
-      setDocs(list);
-      setDocId((cur) => {
+      const list = await api.fetchDecks();
+      setDecks(list);
+      setDeckId((cur) => {
         if (cur != null && list.some((d) => d.id === cur)) return cur;
-        return list[0]?.id ?? null;
+        return null;
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load documents");
+      setError(e instanceof Error ? e.message : "Failed to load decks");
     }
   }, []);
 
   useEffect(() => {
-    void refreshDocs();
-  }, [refreshDocs]);
+    void refreshDecks();
+  }, [refreshDecks]);
 
-  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    if (!f) return;
+  const onCreateDeck = async (name: string) => {
     setBusy(true);
     setError(null);
     try {
-      const d = await api.uploadDocument(f);
-      await refreshDocs();
-      setDocId(d.id);
+      await api.createDeck(name);
+      await refreshDecks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create deck");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onUploadNewDeck = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const d = await api.uploadNewDeck(file);
+      await refreshDecks();
+      setDeckId(d.id);
+      setTab("flashcards");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -81,14 +206,44 @@ export default function App() {
     }
   };
 
-  const onDeleteDoc = async () => {
-    if (!docId) return;
-    if (!confirm("Delete this document and all saved flashcards and chat for it?")) return;
+  const onUploadToDeck = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f || deckId == null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.uploadDeckDocument(deckId, f);
+      await refreshDecks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDeleteDeck = async () => {
+    if (!deckId) return;
+    if (!confirm("Delete this deck and all flashcards and chat in it?")) return;
     setBusy(true);
     try {
-      await api.deleteDocument(docId);
-      setDocId(null);
-      await refreshDocs();
+      await api.deleteDeck(deckId);
+      setDeckId(null);
+      await refreshDecks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDeleteDeckFromList = async (id: number) => {
+    if (!confirm("Delete this deck and all its flashcards and chat?")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteDeck(id);
+      await refreshDecks();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
     } finally {
@@ -101,44 +256,48 @@ export default function App() {
       <header className="app-header">
         <h1>AI Study Assistant</h1>
         <p>
-          Upload lecture notes or readings, then review with flashcards, ask grounded questions, and take a mock test.
+          Build decks of study material. Each deck has its own flashcards, learning chat, and mock test — open a deck to
+          study.
         </p>
       </header>
 
-      <div className="doc-bar">
-        <label className="upload-btn">
-          {busy ? "…" : "Upload document"}
-          <input type="file" accept=".pdf,.txt,.md,.markdown" onChange={onUpload} disabled={busy} />
-        </label>
-        <select
-          className="doc-select"
-          value={docId ?? ""}
-          onChange={(e) => setDocId(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">Select a document…</option>
-          {docs.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.filename}
-            </option>
-          ))}
-        </select>
-        {docId != null && (
-          <button type="button" className="btn btn-danger" onClick={onDeleteDoc} disabled={busy}>
-            Delete
-          </button>
-        )}
-      </div>
-
       {error && <div className="error-banner">{error}</div>}
 
-      {!docId && (
-        <div className="panel">
-          <p className="empty-hint">Upload a PDF or text file to begin. Content stays on your machine in the app database.</p>
-        </div>
-      )}
-
-      {docId != null && (
+      {deckId == null ? (
+        <DeckPicker
+          decks={decks}
+          busy={busy}
+          onCreate={onCreateDeck}
+          onUploadNew={onUploadNewDeck}
+          onOpen={(id) => {
+            setDeckId(id);
+            setTab("flashcards");
+          }}
+          onDelete={onDeleteDeckFromList}
+        />
+      ) : (
         <>
+          <div className="deck-toolbar">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setDeckId(null);
+                setError(null);
+              }}
+            >
+              ← All decks
+            </button>
+            <h2 className="deck-toolbar-title">{currentDeck?.name ?? "Deck"}</h2>
+            <label className="upload-btn deck-toolbar-upload">
+              {busy ? "…" : "Upload / replace material"}
+              <input type="file" accept=".pdf,.txt,.md,.markdown" onChange={onUploadToDeck} disabled={busy} />
+            </label>
+            <button type="button" className="btn btn-danger" onClick={onDeleteDeck} disabled={busy}>
+              Delete deck
+            </button>
+          </div>
+
           <nav className="tabs" aria-label="Study modes">
             <button type="button" className={tab === "flashcards" ? "active" : ""} onClick={() => setTab("flashcards")}>
               Flashcards
@@ -151,9 +310,9 @@ export default function App() {
             </button>
           </nav>
 
-          {tab === "flashcards" && <FlashcardsPanel docId={docId} onError={setError} />}
-          {tab === "chat" && <ChatPanel docId={docId} onError={setError} />}
-          {tab === "quiz" && <QuizPanel docId={docId} onError={setError} />}
+          {tab === "flashcards" && <FlashcardsPanel deckId={deckId} onError={setError} />}
+          {tab === "chat" && <ChatPanel deckId={deckId} onError={setError} />}
+          {tab === "quiz" && <QuizPanel deckId={deckId} onError={setError} />}
         </>
       )}
     </div>
@@ -161,10 +320,10 @@ export default function App() {
 }
 
 function FlashcardsPanel({
-  docId,
+  deckId,
   onError,
 }: {
-  docId: number;
+  deckId: number;
   onError: (s: string | null) => void;
 }) {
   const [section, setSection] = useState<"review" | "manage">("review");
@@ -183,13 +342,13 @@ function FlashcardsPanel({
     setLoading(true);
     onError(null);
     try {
-      setCards(await api.fetchFlashcards(docId));
+      setCards(await api.fetchFlashcards(deckId));
     } catch (e) {
       onError(e instanceof Error ? e.message : "Failed to load flashcards");
     } finally {
       setLoading(false);
     }
-  }, [docId, onError]);
+  }, [deckId, onError]);
 
   useEffect(() => {
     load();
@@ -221,7 +380,7 @@ function FlashcardsPanel({
     setBusy(true);
     onError(null);
     try {
-      await api.reviewFlashcard(docId, reviewCard.id, rating);
+      await api.reviewFlashcard(deckId, reviewCard.id, rating);
       setFlipped(false);
       await load();
     } catch (e) {
@@ -235,7 +394,7 @@ function FlashcardsPanel({
     setBusy(true);
     onError(null);
     try {
-      const next = await api.generateFlashcards(docId);
+      const next = await api.generateFlashcards(deckId);
       setCards(next);
     } catch (e) {
       onError(e instanceof Error ? e.message : "Generation failed");
@@ -255,7 +414,7 @@ function FlashcardsPanel({
     setBusy(true);
     onError(null);
     try {
-      await api.updateFlashcard(docId, editing, { front: draftFront, back: draftBack });
+      await api.updateFlashcard(deckId, editing, { front: draftFront, back: draftBack });
       setEditing(null);
       await load();
     } catch (e) {
@@ -269,7 +428,7 @@ function FlashcardsPanel({
     if (!confirm("Delete this flashcard?")) return;
     setBusy(true);
     try {
-      await api.deleteFlashcard(docId, id);
+      await api.deleteFlashcard(deckId, id);
       await load();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Delete failed");
@@ -283,7 +442,7 @@ function FlashcardsPanel({
     setBusy(true);
     onError(null);
     try {
-      await api.createFlashcard(docId, newFront.trim(), newBack.trim());
+      await api.createFlashcard(deckId, newFront.trim(), newBack.trim());
       setNewFront("");
       setNewBack("");
       await load();
@@ -329,7 +488,7 @@ function FlashcardsPanel({
           ) : (
             <div className="review-wrap">
               <p className="empty-hint" style={{ marginBottom: "0.75rem" }}>
-                Reviews use <strong>SM-2</strong> with four grades. Recall the answer, flip to check, then pick{" "}
+                Reviews use <strong>SM-2</strong> with four grades. Recall the answer, reveal it to check (question stays visible), then pick{" "}
                 <strong>Again</strong> (10 min), <strong>Hard</strong>, <strong>Good</strong>, or <strong>Easy</strong>. Queue:{" "}
                 {dueQueue.length} due now.
               </p>
@@ -341,11 +500,12 @@ function FlashcardsPanel({
                   )}
                 </span>
               </div>
+              <FlashcardMetaLine card={reviewCard} />
               <div className="review-card-outer">
                 <div
                   role="button"
                   tabIndex={0}
-                  className={`review-card-inner ${flipped ? "flipped" : ""}`}
+                  className="review-card-stack"
                   onClick={() => setFlipped((f) => !f)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -353,19 +513,27 @@ function FlashcardsPanel({
                       setFlipped((f) => !f);
                     }
                   }}
-                  aria-label={flipped ? "Show question side" : "Show answer side"}
+                  aria-label={flipped ? "Hide answer" : "Show answer (question stays visible)"}
                 >
-                  <div className="review-face front">
+                  <div className="review-block review-question">
                     <div className="review-face-label">Question / term</div>
                     <div className="review-face-text">{reviewCard.front}</div>
                   </div>
-                  <div className="review-face back">
-                    <div className="review-face-label">Answer</div>
-                    <div className="review-face-text">{reviewCard.back}</div>
-                  </div>
+                  {flipped && (
+                    <>
+                      <div className="review-card-divider" aria-hidden />
+                      <div className="review-block review-answer">
+                        <div className="review-face-label">Answer</div>
+                        <div className="review-face-text">{reviewCard.back}</div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-              <p className="review-hint">Click the card or press Space to flip · then choose Again, Hard, Good, or Easy</p>
+              <p className="review-hint">
+                Click the card or press Space to reveal the answer · the question stays above · then rate with Again, Hard,
+                Good, or Easy
+              </p>
               <div className="review-nav">
                 <button type="button" className="btn btn-primary btn-wide" onClick={() => setFlipped((f) => !f)}>
                   {flipped ? "Show front" : "Show answer"}
@@ -426,6 +594,7 @@ function FlashcardsPanel({
             <div className="flash-list">
               {cards.map((c) => (
                 <div key={c.id} className="flash-card">
+                  <FlashcardMetaLine card={c} />
                   {editing === c.id ? (
                     <>
                       <div className="label">Front</div>
@@ -469,7 +638,7 @@ function FlashcardsPanel({
   );
 }
 
-function ChatPanel({ docId, onError }: { docId: number; onError: (s: string | null) => void }) {
+function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | null) => void }) {
   const [msgs, setMsgs] = useState<api.ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -479,13 +648,13 @@ function ChatPanel({ docId, onError }: { docId: number; onError: (s: string | nu
     setLoading(true);
     onError(null);
     try {
-      setMsgs(await api.fetchChat(docId));
+      setMsgs(await api.fetchChat(deckId));
     } catch (e) {
       onError(e instanceof Error ? e.message : "Failed to load chat");
     } finally {
       setLoading(false);
     }
-  }, [docId, onError]);
+  }, [deckId, onError]);
 
   useEffect(() => {
     load();
@@ -498,8 +667,8 @@ function ChatPanel({ docId, onError }: { docId: number; onError: (s: string | nu
     onError(null);
     setInput("");
     try {
-      await api.sendChat(docId, t);
-      setMsgs(await api.fetchChat(docId));
+      await api.sendChat(deckId, t);
+      setMsgs(await api.fetchChat(deckId));
     } catch (e) {
       onError(e instanceof Error ? e.message : "Message failed");
     } finally {
@@ -548,7 +717,7 @@ function ChatPanel({ docId, onError }: { docId: number; onError: (s: string | nu
   );
 }
 
-function QuizPanel({ docId, onError }: { docId: number; onError: (s: string | null) => void }) {
+function QuizPanel({ deckId, onError }: { deckId: number; onError: (s: string | null) => void }) {
   const [numMc, setNumMc] = useState(5);
   const [numSa, setNumSa] = useState(2);
   const [questions, setQuestions] = useState<QuizQuestion[] | null>(null);
@@ -562,7 +731,7 @@ function QuizPanel({ docId, onError }: { docId: number; onError: (s: string | nu
     onError(null);
     setResult(null);
     try {
-      const { questions: q } = await api.generateQuiz(docId, numMc, numSa);
+      const { questions: q } = await api.generateQuiz(deckId, numMc, numSa);
       setQuestions(q);
       setMcAnswers({});
       setSaAnswers({});
@@ -593,7 +762,7 @@ function QuizPanel({ docId, onError }: { docId: number; onError: (s: string | nu
           user_answer: (saAnswers[q.id] ?? "").trim(),
         };
       });
-      const r = await api.gradeQuiz(docId, questions, answers);
+      const r = await api.gradeQuiz(deckId, questions, answers);
       setResult(r);
     } catch (e) {
       onError(e instanceof Error ? e.message : "Grading failed");

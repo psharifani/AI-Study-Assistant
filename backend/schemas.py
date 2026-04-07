@@ -4,8 +4,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class DocumentOut(BaseModel):
+class DeckOut(BaseModel):
     id: int
+    name: str
     filename: str
     created_at: datetime | None = None
     content_preview: str = ""
@@ -14,12 +15,21 @@ class DocumentOut(BaseModel):
         from_attributes = True
 
 
+class DeckCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+# Alias for older code paths
+DocumentOut = DeckOut
+
+
 class FlashcardOut(BaseModel):
     id: int
     document_id: int
     front: str
     back: str
     sort_order: int
+    created_at: datetime | None = None
     sm2_ease_factor: float = 2.5
     sm2_interval_days: float = 0.0
     sm2_repetitions: int = 0

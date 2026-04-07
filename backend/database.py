@@ -26,12 +26,21 @@ def _migrate_flashcards_sm2_sync(connection) -> None:
         connection.execute(text("ALTER TABLE flashcards ADD COLUMN sm2_next_review_at TIMESTAMP"))
 
 
+def _migrate_documents_name_sync(connection) -> None:
+    r = connection.execute(text("PRAGMA table_info(documents)"))
+    cols = {row[1] for row in r.fetchall()}
+    if "name" not in cols:
+        connection.execute(text("ALTER TABLE documents ADD COLUMN name VARCHAR(200)"))
+        connection.execute(text("UPDATE documents SET name = filename WHERE name IS NULL OR TRIM(COALESCE(name,'')) = ''"))
+
+
 async def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_migrate_flashcards_sm2_sync)
+        await conn.run_sync(_migrate_documents_name_sync)
 
 
 async def get_session():

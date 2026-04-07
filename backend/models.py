@@ -10,7 +10,8 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    filename: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     stored_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     content_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(

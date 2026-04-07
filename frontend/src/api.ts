@@ -1,11 +1,15 @@
 const API = "/api";
 
-export type DocumentSummary = {
+export type DeckSummary = {
   id: number;
+  name: string;
   filename: string;
   created_at: string | null;
   content_preview: string;
 };
+
+/** @deprecated use DeckSummary */
+export type DocumentSummary = DeckSummary;
 
 export type Flashcard = {
   id: number;
@@ -13,6 +17,7 @@ export type Flashcard = {
   front: string;
   back: string;
   sort_order: number;
+  created_at?: string | null;
   sm2_ease_factor?: number;
   sm2_interval_days?: number;
   sm2_repetitions?: number;
@@ -68,42 +73,58 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function fetchDocuments(): Promise<DocumentSummary[]> {
-  return handle(await fetch(`${API}/documents`));
+export async function fetchDecks(): Promise<DeckSummary[]> {
+  return handle(await fetch(`${API}/decks`));
 }
 
-export async function uploadDocument(file: File): Promise<DocumentSummary> {
-  const fd = new FormData();
-  fd.append("file", file);
+export async function createDeck(name: string): Promise<DeckSummary> {
   return handle(
-    await fetch(`${API}/documents`, { method: "POST", body: fd })
+    await fetch(`${API}/decks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    })
   );
 }
 
-export async function deleteDocument(id: number): Promise<void> {
-  const res = await fetch(`${API}/documents/${id}`, { method: "DELETE" });
+/** Create a new deck from an uploaded file (name derived from filename). */
+export async function uploadNewDeck(file: File): Promise<DeckSummary> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return handle(await fetch(`${API}/decks/upload`, { method: "POST", body: fd }));
+}
+
+/** Replace study material on an existing deck. */
+export async function uploadDeckDocument(deckId: number, file: File): Promise<DeckSummary> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return handle(await fetch(`${API}/decks/${deckId}/document`, { method: "POST", body: fd }));
+}
+
+export async function deleteDeck(id: number): Promise<void> {
+  const res = await fetch(`${API}/decks/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
 }
 
-export async function fetchFlashcards(docId: number): Promise<Flashcard[]> {
-  return handle(await fetch(`${API}/documents/${docId}/flashcards`));
+export async function fetchFlashcards(deckId: number): Promise<Flashcard[]> {
+  return handle(await fetch(`${API}/decks/${deckId}/flashcards`));
 }
 
-export async function generateFlashcards(docId: number): Promise<Flashcard[]> {
+export async function generateFlashcards(deckId: number): Promise<Flashcard[]> {
   return handle(
-    await fetch(`${API}/documents/${docId}/flashcards/generate`, {
+    await fetch(`${API}/decks/${deckId}/flashcards/generate`, {
       method: "POST",
     })
   );
 }
 
 export async function createFlashcard(
-  docId: number,
+  deckId: number,
   front: string,
   back: string
 ): Promise<Flashcard> {
   return handle(
-    await fetch(`${API}/documents/${docId}/flashcards`, {
+    await fetch(`${API}/decks/${deckId}/flashcards`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ front, back }),
@@ -112,12 +133,12 @@ export async function createFlashcard(
 }
 
 export async function updateFlashcard(
-  docId: number,
+  deckId: number,
   fcId: number,
   patch: { front?: string; back?: string }
 ): Promise<Flashcard> {
   return handle(
-    await fetch(`${API}/documents/${docId}/flashcards/${fcId}`, {
+    await fetch(`${API}/decks/${deckId}/flashcards/${fcId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
@@ -128,12 +149,12 @@ export async function updateFlashcard(
 export type FlashcardRating = "again" | "hard" | "good" | "easy";
 
 export async function reviewFlashcard(
-  docId: number,
+  deckId: number,
   fcId: number,
   rating: FlashcardRating
 ): Promise<Flashcard> {
   return handle(
-    await fetch(`${API}/documents/${docId}/flashcards/${fcId}/review`, {
+    await fetch(`${API}/decks/${deckId}/flashcards/${fcId}/review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rating }),
@@ -141,20 +162,20 @@ export async function reviewFlashcard(
   );
 }
 
-export async function deleteFlashcard(docId: number, fcId: number): Promise<void> {
-  const res = await fetch(`${API}/documents/${docId}/flashcards/${fcId}`, {
+export async function deleteFlashcard(deckId: number, fcId: number): Promise<void> {
+  const res = await fetch(`${API}/decks/${deckId}/flashcards/${fcId}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await res.text());
 }
 
-export async function fetchChat(docId: number): Promise<ChatMessage[]> {
-  return handle(await fetch(`${API}/documents/${docId}/chat`));
+export async function fetchChat(deckId: number): Promise<ChatMessage[]> {
+  return handle(await fetch(`${API}/decks/${deckId}/chat`));
 }
 
-export async function sendChat(docId: number, message: string): Promise<ChatMessage> {
+export async function sendChat(deckId: number, message: string): Promise<ChatMessage> {
   return handle(
-    await fetch(`${API}/documents/${docId}/chat`, {
+    await fetch(`${API}/decks/${deckId}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),
@@ -163,12 +184,12 @@ export async function sendChat(docId: number, message: string): Promise<ChatMess
 }
 
 export async function generateQuiz(
-  docId: number,
+  deckId: number,
   numMc: number,
   numSa: number
 ): Promise<{ questions: QuizQuestion[] }> {
   return handle(
-    await fetch(`${API}/documents/${docId}/quiz/generate`, {
+    await fetch(`${API}/decks/${deckId}/quiz/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -180,12 +201,12 @@ export async function generateQuiz(
 }
 
 export async function gradeQuiz(
-  docId: number,
+  deckId: number,
   questions: QuizQuestion[],
   answers: { question_id: string; question_type: "multiple_choice" | "short_answer"; user_answer: string | number }[]
 ): Promise<QuizResult> {
   return handle(
-    await fetch(`${API}/documents/${docId}/quiz/grade`, {
+    await fetch(`${API}/decks/${deckId}/quiz/grade`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ questions, answers }),
