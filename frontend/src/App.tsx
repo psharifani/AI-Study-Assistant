@@ -270,7 +270,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
+      <header className={deckId == null ? "app-header app-header-with-rule" : "app-header"}>
         <h1>AI Study Assistant</h1>
         <p>
           Create a deck, then open it to upload material if you want. Each deck has its own flashcards, learning chat, and
