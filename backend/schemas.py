@@ -20,9 +20,17 @@ class FlashcardOut(BaseModel):
     front: str
     back: str
     sort_order: int
+    sm2_ease_factor: float = 2.5
+    sm2_interval_days: float = 0.0
+    sm2_repetitions: int = 0
+    sm2_next_review_at: datetime | None = None
 
     class Config:
         from_attributes = True
+
+
+class FlashcardReviewBody(BaseModel):
+    quality: int = Field(..., ge=0, le=5, description="SM-2 quality: 0=blackout … 5=perfect")
 
 
 class FlashcardCreate(BaseModel):

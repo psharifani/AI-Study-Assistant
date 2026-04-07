@@ -13,6 +13,10 @@ export type Flashcard = {
   front: string;
   back: string;
   sort_order: number;
+  sm2_ease_factor?: number;
+  sm2_interval_days?: number;
+  sm2_repetitions?: number;
+  sm2_next_review_at?: string | null;
 };
 
 export type ChatMessage = {
@@ -117,6 +121,17 @@ export async function updateFlashcard(
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
+    })
+  );
+}
+
+/** SuperMemo-2 quality: 0 = blackout … 5 = perfect recall */
+export async function reviewFlashcard(docId: number, fcId: number, quality: number): Promise<Flashcard> {
+  return handle(
+    await fetch(`${API}/documents/${docId}/flashcards/${fcId}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quality }),
     })
   );
 }

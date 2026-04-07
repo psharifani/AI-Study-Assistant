@@ -259,6 +259,30 @@ a {
   min-width: 7rem;
 }
 
+.sm2-quality {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.sm2-quality-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.btn.sm2-q {
+  min-width: 2.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sm2-quality-legend {
+  margin: 0.65rem 0 0;
+  font-size: 0.8rem;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);

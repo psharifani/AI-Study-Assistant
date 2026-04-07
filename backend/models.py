@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -33,6 +33,11 @@ class Flashcard(Base):
     front: Mapped[str] = mapped_column(Text, nullable=False)
     back: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # SuperMemo-2 scheduling
+    sm2_ease_factor: Mapped[float] = mapped_column(Float, default=2.5)
+    sm2_interval_days: Mapped[float] = mapped_column(Float, default=0.0)
+    sm2_repetitions: Mapped[int] = mapped_column(Integer, default=0)
+    sm2_next_review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

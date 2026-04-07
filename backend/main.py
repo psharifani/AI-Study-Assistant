@@ -10,12 +10,14 @@ from config import UPLOADS_DIR, get_openai_credentials
 from database import get_session, init_db
 from document_extract import extract_text_from_file
 from llm_service import chat_about_document, generate_flashcards, generate_quiz, grade_short_answer
+from sm2 import apply_sm2_review
 from models import ChatMessage, Document, Flashcard
 from schemas import (
     ChatRequest,
     DocumentOut,
     FlashcardCreate,
     FlashcardOut,
+    FlashcardReviewBody,
     FlashcardUpdate,
     ChatMessageOut,
     QuizGenerateRequest,
@@ -168,6 +170,31 @@ async def create_flashcard(
     order = max((f.sort_order for f in rows), default=-1) + 1
     fc = Flashcard(document_id=doc_id, front=body.front, back=body.back, sort_order=order)
     session.add(fc)
+    await session.commit()
+    await session.refresh(fc)
+    return fc
+
+
+@app.post("/api/documents/{doc_id}/flashcards/{fc_id}/review", response_model=FlashcardOut)
+async def review_flashcard(
+    doc_id: int,
+    fc_id: int,
+    body: FlashcardReviewBody,
+    session: AsyncSession = Depends(get_session),
+):
+    fc = await session.get(Flashcard, fc_id)
+    if not fc or fc.document_id != doc_id:
+        raise HTTPException(404, "Flashcard not found")
+    state, next_at = apply_sm2_review(
+        body.quality,
+        fc.sm2_ease_factor,
+        fc.sm2_interval_days,
+        fc.sm2_repetitions,
+    )
+    fc.sm2_ease_factor = state.ease_factor
+    fc.sm2_interval_days = state.interval_days
+    fc.sm2_repetitions = state.repetitions
+    fc.sm2_next_review_at = next_at
     await session.commit()
     await session.refresh(fc)
     return fc

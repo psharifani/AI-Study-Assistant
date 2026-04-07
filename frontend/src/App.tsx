@@ -4,6 +4,44 @@ import * as api from "./api";
 
 type Tab = "flashcards" | "chat" | "quiz";
 
+/** SM-2 quality scale (0–5), shown as tooltips on rating buttons */
+const SM2_QUALITY_HINT: Record<number, string> = {
+  0: "Complete blackout",
+  1: "Incorrect; remembered the correct one",
+  2: "Incorrect; correct answer felt familiar",
+  3: "Correct with serious difficulty",
+  4: "Correct with hesitation",
+  5: "Perfect response",
+};
+
+function buildSm2DueQueue(cards: FlashcardT[]): FlashcardT[] {
+  const now = Date.now();
+  return cards
+    .filter((c) => {
+      const t = c.sm2_next_review_at;
+      if (t == null || t === "") return true;
+      return new Date(t).getTime() <= now;
+    })
+    .sort((a, b) => {
+      const aNew = !a.sm2_next_review_at;
+      const bNew = !b.sm2_next_review_at;
+      if (aNew && bNew) return a.id - b.id;
+      if (aNew) return -1;
+      if (bNew) return 1;
+      return new Date(a.sm2_next_review_at!).getTime() - new Date(b.sm2_next_review_at!).getTime();
+    });
+}
+
+function nextFutureReview(cards: FlashcardT[]): Date | null {
+  const now = Date.now();
+  const times = cards
+    .map((c) => c.sm2_next_review_at)
+    .filter((t): t is string => !!t && new Date(t).getTime() > now)
+    .map((t) => new Date(t).getTime());
+  if (!times.length) return null;
+  return new Date(Math.min(...times));
+}
+
 export default function App() {
   const [docs, setDocs] = useState<api.DocumentSummary[]>([]);
   const [docId, setDocId] = useState<number | null>(null);
@@ -125,15 +163,6 @@ export default function App() {
   );
 }
 
-function shuffleIndices(n: number): number[] {
-  const a = Array.from({ length: n }, (_, i) => i);
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 function FlashcardsPanel({
   docId,
   onError,
@@ -151,8 +180,6 @@ function FlashcardsPanel({
   const [newFront, setNewFront] = useState("");
   const [newBack, setNewBack] = useState("");
 
-  const [reviewOrder, setReviewOrder] = useState<number[]>([]);
-  const [reviewIdx, setReviewIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
 
   const load = useCallback(async () => {
@@ -172,55 +199,40 @@ function FlashcardsPanel({
   }, [load]);
 
   useEffect(() => {
-    setReviewOrder(cards.map((_, i) => i));
-    setReviewIdx(0);
     setFlipped(false);
   }, [cards]);
 
-  const reviewCard = useMemo(() => {
-    if (!cards.length || !reviewOrder.length) return null;
-    const pos = Math.min(reviewIdx, reviewOrder.length - 1);
-    const cardIdx = reviewOrder[pos];
-    return cards[cardIdx] ?? null;
-  }, [cards, reviewOrder, reviewIdx]);
-
-  const goPrev = () => {
-    setReviewIdx((i) => Math.max(0, i - 1));
-    setFlipped(false);
-  };
-
-  const goNext = () => {
-    setReviewIdx((i) => Math.min(reviewOrder.length - 1, i + 1));
-    setFlipped(false);
-  };
-
-  const doShuffle = () => {
-    setReviewOrder(shuffleIndices(cards.length));
-    setReviewIdx(0);
-    setFlipped(false);
-  };
+  const dueQueue = useMemo(() => buildSm2DueQueue(cards), [cards]);
+  const nextDueLater = useMemo(() => nextFutureReview(cards), [cards]);
+  const reviewCard = dueQueue[0] ?? null;
 
   useEffect(() => {
     if (section !== "review") return;
-    const maxIdx = Math.max(0, reviewOrder.length - 1);
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
         setFlipped((f) => !f);
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setReviewIdx((i) => Math.max(0, i - 1));
-        setFlipped(false);
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setReviewIdx((i) => Math.min(maxIdx, i + 1));
-        setFlipped(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [section, reviewOrder]);
+  }, [section]);
+
+  const submitSm2Quality = async (quality: number) => {
+    if (!reviewCard) return;
+    setBusy(true);
+    onError(null);
+    try {
+      await api.reviewFlashcard(docId, reviewCard.id, quality);
+      setFlipped(false);
+      await load();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not save review");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const gen = async () => {
     setBusy(true);
@@ -305,15 +317,31 @@ function FlashcardsPanel({
             <p className="empty-hint">
               No flashcards yet. Switch to <strong>Manage flashcards</strong> to generate or add cards.
             </p>
+          ) : !reviewCard ? (
+            <div className="review-wrap">
+              <p className="empty-hint" style={{ marginBottom: "0.75rem" }}>
+                <strong>SuperMemo-2 (SM-2):</strong> nothing is due right now. Ratings (0–5) schedule the next review; quality
+                below 3 resets the card.
+              </p>
+              {nextDueLater && (
+                <p className="review-progress">
+                  Next card due: {nextDueLater.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+              )}
+            </div>
           ) : (
             <div className="review-wrap">
+              <p className="empty-hint" style={{ marginBottom: "0.75rem" }}>
+                Reviews use the <strong>SM-2</strong> algorithm. Recall the answer, flip to check, then rate recall quality
+                (0 = blackout, 5 = perfect). Queue: {dueQueue.length} due now.
+              </p>
               <div className="review-meta">
                 <span className="review-progress">
-                  Card {reviewIdx + 1} of {reviewOrder.length}
+                  Due now · {dueQueue.length} in queue
+                  {reviewCard.sm2_ease_factor != null && (
+                    <> · EF {(reviewCard.sm2_ease_factor ?? 2.5).toFixed(2)}</>
+                  )}
                 </span>
-                <button type="button" className="btn" onClick={doShuffle} disabled={busy}>
-                  Shuffle order
-                </button>
               </div>
               <div className="review-card-outer">
                 <div
@@ -331,31 +359,42 @@ function FlashcardsPanel({
                 >
                   <div className="review-face front">
                     <div className="review-face-label">Question / term</div>
-                    <div className="review-face-text">{reviewCard?.front}</div>
+                    <div className="review-face-text">{reviewCard.front}</div>
                   </div>
                   <div className="review-face back">
                     <div className="review-face-label">Answer</div>
-                    <div className="review-face-text">{reviewCard?.back}</div>
+                    <div className="review-face-text">{reviewCard.back}</div>
                   </div>
                 </div>
               </div>
-              <p className="review-hint">Click the card or press Space to flip · ← → to move between cards</p>
+              <p className="review-hint">Click the card or press Space to flip · then rate your recall (SM-2)</p>
               <div className="review-nav">
-                <button type="button" className="btn btn-wide" onClick={goPrev} disabled={reviewIdx <= 0}>
-                  Previous
-                </button>
                 <button type="button" className="btn btn-primary btn-wide" onClick={() => setFlipped((f) => !f)}>
                   {flipped ? "Show front" : "Show answer"}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-wide"
-                  onClick={goNext}
-                  disabled={reviewIdx >= reviewOrder.length - 1}
-                >
-                  Next
-                </button>
               </div>
+              {flipped && (
+                <div className="sm2-quality">
+                  <div className="field-label">How well did you recall? (0–5)</div>
+                  <div className="sm2-quality-grid">
+                    {[0, 1, 2, 3, 4, 5].map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        className="btn sm2-q"
+                        title={SM2_QUALITY_HINT[q]}
+                        onClick={() => submitSm2Quality(q)}
+                        disabled={busy}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="sm2-quality-legend empty-hint">
+                    0–2 = failed (review soon); 3–5 = success (interval grows per SM-2)
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </>
