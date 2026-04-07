@@ -72,14 +72,12 @@ function DeckPicker({
   decks,
   busy,
   onCreate,
-  onUploadNew,
   onOpen,
   onDelete,
 }: {
   decks: api.DeckSummary[];
   busy: boolean;
   onCreate: (name: string) => Promise<void>;
-  onUploadNew: (file: File) => Promise<void>;
   onOpen: (id: number) => void;
   onDelete: (id: number) => Promise<void>;
 }) {
@@ -93,11 +91,8 @@ function DeckPicker({
 
   return (
     <div className="deck-picker">
-      <div className="panel deck-picker-actions">
-        <h2 className="deck-picker-title">Your decks</h2>
-        <p className="empty-hint deck-picker-lead">
-          Create a deck or upload a file. Open a deck to use flashcards, learning chat, and mock tests for that material.
-        </p>
+      <div className="panel deck-picker-actions deck-panel-tile deck-create-strip">
+        <h2 className="deck-picker-title">Create a deck</h2>
         <form onSubmit={handleCreate} className="deck-create-form">
           <input
             className="doc-select"
@@ -111,30 +106,19 @@ function DeckPicker({
             Create deck
           </button>
         </form>
-        <div className="deck-upload-row">
-          <label className="upload-btn">
-            {busy ? "…" : "Upload file as new deck"}
-            <input
-              type="file"
-              accept=".pdf,.txt,.md,.markdown"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (f) void onUploadNew(f);
-              }}
-              disabled={busy}
-            />
-          </label>
-        </div>
       </div>
       <div className="deck-grid">
         {decks.length === 0 ? (
-          <p className="empty-hint deck-grid-empty">No decks yet. Create one or upload a file.</p>
+          <p className="empty-hint deck-grid-empty">No decks yet. Create one above.</p>
         ) : (
           decks.map((d) => (
-            <div key={d.id} className="deck-card">
-              <div className="deck-card-name">{d.name}</div>
-              <div className="deck-card-preview empty-hint">{d.content_preview || "No study material uploaded yet."}</div>
+            <div key={d.id} className="panel deck-card deck-panel-tile deck-card-strip">
+              <div className="deck-card-name" title={d.name}>
+                {d.name}
+              </div>
+              <div className="deck-card-preview empty-hint" title={d.content_preview || undefined}>
+                {d.content_preview || "No material yet — open to upload."}
+              </div>
               <div className="deck-card-actions">
                 <button type="button" className="btn btn-primary" onClick={() => onOpen(d.id)} disabled={busy}>
                   Open
@@ -191,21 +175,6 @@ export default function App() {
     }
   };
 
-  const onUploadNewDeck = async (file: File) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const d = await api.uploadNewDeck(file);
-      await refreshDecks();
-      setDeckId(d.id);
-      setTab("flashcards");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const onUploadToDeck = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     e.target.value = "";
@@ -256,8 +225,8 @@ export default function App() {
       <header className="app-header">
         <h1>AI Study Assistant</h1>
         <p>
-          Build decks of study material. Each deck has its own flashcards, learning chat, and mock test — open a deck to
-          study.
+          Create a deck, then open it to upload material if you want. Each deck has its own flashcards, learning chat, and
+          mock test.
         </p>
       </header>
 
@@ -268,7 +237,6 @@ export default function App() {
           decks={decks}
           busy={busy}
           onCreate={onCreateDeck}
-          onUploadNew={onUploadNewDeck}
           onOpen={(id) => {
             setDeckId(id);
             setTab("flashcards");

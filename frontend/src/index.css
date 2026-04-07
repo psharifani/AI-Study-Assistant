@@ -84,22 +84,32 @@ a {
   border-radius: var(--radius);
 }
 
-.doc-bar label.upload-btn {
+/* File upload as primary button (doc bar + deck toolbar) */
+label.upload-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  padding: 0.45rem 0.9rem;
+  min-height: 2.25rem;
+  box-sizing: border-box;
   background: var(--accent);
   color: #0a0e12;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 8px;
   font-weight: 600;
   font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
 }
 
-.doc-bar label.upload-btn:hover {
-  background: var(--accent-dim);
-  color: var(--text);
+label.upload-btn:hover:not(:has(input:disabled)) {
+  filter: brightness(1.08);
+}
+
+label.upload-btn:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .doc-bar input[type="file"],
@@ -107,74 +117,125 @@ label.upload-btn input[type="file"] {
   display: none;
 }
 
+/* Narrow column, centered — shorter horizontal span */
 .deck-picker {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 22rem;
+  margin-inline: auto;
 }
 
-.deck-picker-actions .deck-picker-title {
-  font-size: 1.15rem;
-  margin: 0 0 0.5rem;
+.deck-picker .panel h2 {
+  margin: 0 0 0.35rem;
 }
 
-.deck-picker-lead {
-  margin-bottom: 1rem;
+/* Taller block: stack title + form vertically */
+.deck-create-strip.panel.deck-panel-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  min-height: 0 !important;
+  padding: 1rem 1.1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.deck-create-strip .deck-picker-title {
+  font-size: 1.05rem;
+  margin: 0;
+  font-weight: 600;
 }
 
 .deck-create-form {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  width: 100%;
 }
 
 .deck-create-form .doc-select {
-  flex: 1;
-  min-width: 200px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
 }
 
-.deck-upload-row {
-  margin-top: 0.25rem;
+.deck-create-form .btn {
+  padding: 0.55rem 0.9rem;
+  font-size: 0.875rem;
+  align-self: flex-start;
+}
+
+/* Deck cards: taller vertically, content stacked */
+.deck-card-strip.panel.deck-panel-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  min-height: 6.5rem;
+  padding: 1rem 1.1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.deck-panel-tile {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .deck-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
 }
 
 .deck-grid-empty {
-  grid-column: 1 / -1;
-}
-
-.deck-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-height: 140px;
+  text-align: center;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.9rem;
 }
 
 .deck-card-name {
   font-weight: 600;
-  font-size: 1.05rem;
+  font-size: 1rem;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .deck-card-preview {
-  font-size: 0.85rem;
-  max-height: 4.5rem;
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  white-space: normal;
 }
 
 .deck-card-actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
   margin-top: auto;
+  padding-top: 0.15rem;
+}
+
+.deck-card-actions .btn {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+.deck-picker .panel.deck-panel-tile:not(.deck-create-strip):not(.deck-card-strip) {
+  min-height: 0 !important;
+  padding: 1rem 1.1rem;
 }
 
 .deck-toolbar {
