@@ -81,6 +81,41 @@ async def chat_about_document(document_text: str, history: list[dict[str, str]],
     return (resp.choices[0].message.content or "").strip()
 
 
+async def suggest_chat_session_title(user_message: str, assistant_reply: str) -> str:
+    """Short sidebar label for the thread: subject/topic, not a copy of the opening line."""
+    client, model = _openai()
+    um = (user_message or "").strip()[:2000]
+    ar = (assistant_reply or "").strip()[:1500]
+    prompt = f"""Based on this exchange, what is the main SUBJECT or TOPIC of the conversation?
+
+Student message:
+{um}
+
+Assistant reply:
+{ar}
+
+Output exactly one line: a short title (3–10 words) naming that subject, like a folder label.
+Examples of good titles: "Causes of WWI", "SM-2 scheduling", "Comparing fascism and communism".
+Do not repeat the student's question verbatim. No quotation marks. No trailing period."""
+    resp = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": "You name study chat threads by topic only. Reply with a single plain title line, nothing else.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.35,
+        max_tokens=48,
+    )
+    raw = (resp.choices[0].message.content or "").strip()
+    line = raw.split("\n")[0].strip().strip('"').strip("'").rstrip(".")
+    if len(line) > 80:
+        line = line[:77] + "…"
+    return line or "Chat"
+
+
 async def generate_quiz(
     document_text: str, num_mc: int, num_sa: int
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

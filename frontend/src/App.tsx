@@ -660,37 +660,94 @@ function FlashcardsPanel({
   );
 }
 
+function formatChatSessionTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | null) => void }) {
+  const [sessions, setSessions] = useState<api.ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [msgs, setMsgs] = useState<api.ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [msgsLoading, setMsgsLoading] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const load = useCallback(async () => {
+  const loadSessions = useCallback(async () => {
     setLoading(true);
     onError(null);
     try {
-      setMsgs(await api.fetchChat(deckId));
+      let list = await api.fetchChatSessions(deckId);
+      if (list.length === 0) {
+        const created = await api.createChatSession(deckId);
+        list = [created];
+      }
+      setSessions(list);
+      setActiveSessionId((cur) => {
+        if (cur != null && list.some((x) => x.id === cur)) return cur;
+        return list[0]?.id ?? null;
+      });
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Failed to load chat");
+      onError(e instanceof Error ? e.message : "Failed to load chats");
     } finally {
       setLoading(false);
     }
   }, [deckId, onError]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadSessions();
+  }, [loadSessions]);
+
+  useEffect(() => {
+    if (activeSessionId == null) return;
+    let cancelled = false;
+    const loadMsgs = async () => {
+      setMsgsLoading(true);
+      onError(null);
+      try {
+        const m = await api.fetchChatMessages(deckId, activeSessionId);
+        if (!cancelled) setMsgs(m);
+      } catch (e) {
+        if (!cancelled) onError(e instanceof Error ? e.message : "Failed to load messages");
+      } finally {
+        if (!cancelled) setMsgsLoading(false);
+      }
+    };
+    void loadMsgs();
+    return () => {
+      cancelled = true;
+    };
+  }, [deckId, activeSessionId, onError]);
+
+  const newChat = async () => {
+    onError(null);
+    try {
+      const s = await api.createChatSession(deckId);
+      setSessions((prev) => [s, ...prev]);
+      setActiveSessionId(s.id);
+      setMsgs([]);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not start chat");
+    }
+  };
 
   const send = async () => {
     const t = input.trim();
-    if (!t || sending) return;
+    if (!t || sending || activeSessionId == null) return;
     setSending(true);
     onError(null);
     setInput("");
     try {
-      await api.sendChat(deckId, t);
-      setMsgs(await api.fetchChat(deckId));
+      await api.sendChatMessage(deckId, activeSessionId, t);
+      const [nextMsgs, nextSessions] = await Promise.all([
+        api.fetchChatMessages(deckId, activeSessionId),
+        api.fetchChatSessions(deckId),
+      ]);
+      setMsgs(nextMsgs);
+      setSessions(nextSessions);
     } catch (e) {
       onError(e instanceof Error ? e.message : "Message failed");
     } finally {
@@ -699,7 +756,7 @@ function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
   };
 
   return (
-    <div className="panel">
+    <div className="panel chat-panel-outer">
       <h2>Learning chat</h2>
       <p className="empty-hint" style={{ marginBottom: "1rem" }}>
         Ask for simpler explanations, summaries, definitions, or how theories in your document relate. Replies are limited to your uploaded material.
@@ -707,33 +764,65 @@ function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
       {loading ? (
         <p className="empty-hint">Loading…</p>
       ) : (
-        <>
-          <div className="chat-log">
-            {msgs.length === 0 && <p className="empty-hint">No messages yet. Ask a question about your document.</p>}
-            {msgs.map((m) => (
-              <div key={m.id} className={`chat-bubble ${m.role === "user" ? "user" : "assistant"}`}>
-                {m.content}
-              </div>
-            ))}
+        <div className="chat-layout">
+          <aside className="chat-sidebar" aria-label="Past chats">
+            <div className="chat-sidebar-header">
+              <span className="chat-sidebar-title">Chats</span>
+              <button type="button" className="btn btn-primary chat-sidebar-new" onClick={() => void newChat()}>
+                New chat
+              </button>
+            </div>
+            <ul className="chat-session-list">
+              {sessions.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    className={`chat-session-item ${s.id === activeSessionId ? "active" : ""}`}
+                    onClick={() => setActiveSessionId(s.id)}
+                  >
+                    <span className="chat-session-item-title">{s.title?.trim() || "New chat"}</span>
+                    <span className="chat-session-item-meta">{formatChatSessionTime(s.updated_at ?? s.created_at)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </aside>
+          <div className="chat-main">
+            {msgsLoading ? (
+              <p className="empty-hint">Loading messages…</p>
+            ) : (
+              <>
+                <div className="chat-log">
+                  {msgs.length === 0 && (
+                    <p className="empty-hint">No messages yet. Ask a question about your document.</p>
+                  )}
+                  {msgs.map((m) => (
+                    <div key={m.id} className={`chat-bubble ${m.role === "user" ? "user" : "assistant"}`}>
+                      {m.content}
+                    </div>
+                  ))}
+                </div>
+                <div className="chat-input-row">
+                  <textarea
+                    placeholder="e.g. Summarize the main argument in simpler terms…"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void send();
+                      }
+                    }}
+                    disabled={sending}
+                  />
+                  <button type="button" className="btn btn-primary" onClick={() => void send()} disabled={sending || !input.trim()}>
+                    {sending ? "…" : "Send"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          <div className="chat-input-row">
-            <textarea
-              placeholder="e.g. Summarize the main argument in simpler terms…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              disabled={sending}
-            />
-            <button type="button" className="btn btn-primary" onClick={send} disabled={sending || !input.trim()}>
-              {sending ? "…" : "Send"}
-            </button>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

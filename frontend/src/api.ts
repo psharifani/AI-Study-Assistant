@@ -31,6 +31,14 @@ export type ChatMessage = {
   created_at?: string | null;
 };
 
+export type ChatSession = {
+  id: number;
+  document_id: number;
+  title: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export type QuizQuestionMC = {
   id: string;
   type: "multiple_choice";
@@ -169,13 +177,27 @@ export async function deleteFlashcard(deckId: number, fcId: number): Promise<voi
   if (!res.ok) throw new Error(await res.text());
 }
 
-export async function fetchChat(deckId: number): Promise<ChatMessage[]> {
-  return handle(await fetch(`${API}/decks/${deckId}/chat`));
+export async function fetchChatSessions(deckId: number): Promise<ChatSession[]> {
+  return handle(await fetch(`${API}/decks/${deckId}/chat/sessions`));
 }
 
-export async function sendChat(deckId: number, message: string): Promise<ChatMessage> {
+export async function createChatSession(deckId: number): Promise<ChatSession> {
   return handle(
-    await fetch(`${API}/decks/${deckId}/chat`, {
+    await fetch(`${API}/decks/${deckId}/chat/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+  );
+}
+
+export async function fetchChatMessages(deckId: number, sessionId: number): Promise<ChatMessage[]> {
+  return handle(await fetch(`${API}/decks/${deckId}/chat/sessions/${sessionId}/messages`));
+}
+
+export async function sendChatMessage(deckId: number, sessionId: number, message: string): Promise<ChatMessage> {
+  return handle(
+    await fetch(`${API}/decks/${deckId}/chat/sessions/${sessionId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),

@@ -66,6 +66,17 @@ class ChatMessageOut(BaseModel):
         from_attributes = True
 
 
+class ChatSessionOut(BaseModel):
+    id: int
+    document_id: int
+    title: str | None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
 

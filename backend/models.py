@@ -21,8 +21,8 @@ class Document(Base):
     flashcards: Mapped[list["Flashcard"]] = relationship(
         "Flashcard", back_populates="document", cascade="all, delete-orphan"
     )
-    chat_messages: Mapped[list["ChatMessage"]] = relationship(
-        "ChatMessage", back_populates="document", cascade="all, delete-orphan"
+    chat_sessions: Mapped[list["ChatSession"]] = relationship(
+        "ChatSession", back_populates="document", cascade="all, delete-orphan"
     )
 
 
@@ -46,15 +46,38 @@ class Flashcard(Base):
     document: Mapped["Document"] = relationship("Document", back_populates="flashcards")
 
 
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    document: Mapped["Document"] = relationship("Document", back_populates="chat_sessions")
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage", back_populates="session", cascade="all, delete-orphan"
+    )
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), nullable=False)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False
+    )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
-    document: Mapped["Document"] = relationship("Document", back_populates="chat_messages")
+    session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")

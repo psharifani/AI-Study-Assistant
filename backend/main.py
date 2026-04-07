@@ -1,5 +1,5 @@
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
@@ -10,8 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import UPLOADS_DIR, get_openai_credentials
 from database import get_session, init_db
 from document_extract import extract_text_from_file
-from llm_service import chat_about_document, generate_flashcards, generate_quiz, grade_short_answer
-from models import ChatMessage, Document, Flashcard
+from llm_service import (
+    chat_about_document,
+    generate_flashcards,
+    generate_quiz,
+    grade_short_answer,
+    suggest_chat_session_title,
+)
+from models import ChatMessage, ChatSession, Document, Flashcard
 from sm2 import apply_four_button_review
 from schemas import (
     ChatRequest,
@@ -22,6 +28,7 @@ from schemas import (
     FlashcardReviewBody,
     FlashcardUpdate,
     ChatMessageOut,
+    ChatSessionOut,
     QuizGenerateRequest,
     QuizGradeItem,
     QuizGradeRequest,
@@ -288,31 +295,71 @@ async def delete_flashcard(deck_id: int, fc_id: int, session: AsyncSession = Dep
     return {"deleted": True}
 
 
-@app.get("/api/decks/{deck_id}/chat", response_model=list[ChatMessageOut])
-async def get_chat_history(deck_id: int, session: AsyncSession = Depends(get_session)):
+@app.get("/api/decks/{deck_id}/chat/sessions", response_model=list[ChatSessionOut])
+async def list_chat_sessions(deck_id: int, session: AsyncSession = Depends(get_session)):
     doc = await session.get(Document, deck_id)
     if not doc:
         raise HTTPException(404, "Deck not found")
     r = await session.execute(
-        select(ChatMessage).where(ChatMessage.document_id == deck_id).order_by(ChatMessage.created_at)
+        select(ChatSession)
+        .where(ChatSession.document_id == deck_id)
+        .order_by(ChatSession.updated_at.desc())
     )
     return list(r.scalars().all())
 
 
-@app.post("/api/decks/{deck_id}/chat", response_model=ChatMessageOut)
-async def post_chat(deck_id: int, body: ChatRequest, session: AsyncSession = Depends(get_session)):
+@app.post("/api/decks/{deck_id}/chat/sessions", response_model=ChatSessionOut)
+async def create_chat_session(deck_id: int, session: AsyncSession = Depends(get_session)):
+    doc = await session.get(Document, deck_id)
+    if not doc:
+        raise HTTPException(404, "Deck not found")
+    now = datetime.now(timezone.utc)
+    cs = ChatSession(document_id=deck_id, title="New chat", created_at=now, updated_at=now)
+    session.add(cs)
+    await session.commit()
+    await session.refresh(cs)
+    return cs
+
+
+@app.get(
+    "/api/decks/{deck_id}/chat/sessions/{session_id}/messages",
+    response_model=list[ChatMessageOut],
+)
+async def get_chat_messages(
+    deck_id: int, session_id: int, session: AsyncSession = Depends(get_session)
+):
+    cs = await session.get(ChatSession, session_id)
+    if not cs or cs.document_id != deck_id:
+        raise HTTPException(404, "Chat session not found")
+    r = await session.execute(
+        select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at)
+    )
+    return list(r.scalars().all())
+
+
+@app.post(
+    "/api/decks/{deck_id}/chat/sessions/{session_id}/messages",
+    response_model=ChatMessageOut,
+)
+async def post_chat_message(
+    deck_id: int, session_id: int, body: ChatRequest, session: AsyncSession = Depends(get_session)
+):
     doc = await session.get(Document, deck_id)
     if not doc:
         raise HTTPException(404, "Deck not found")
     if not doc.content_text.strip():
         raise HTTPException(400, "Deck has no study material — upload a document first")
 
-    user_msg = ChatMessage(document_id=deck_id, role="user", content=body.message)
+    cs = await session.get(ChatSession, session_id)
+    if not cs or cs.document_id != deck_id:
+        raise HTTPException(404, "Chat session not found")
+
+    user_msg = ChatMessage(session_id=session_id, role="user", content=body.message)
     session.add(user_msg)
     await session.commit()
 
     r = await session.execute(
-        select(ChatMessage).where(ChatMessage.document_id == deck_id).order_by(ChatMessage.created_at)
+        select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at)
     )
     history_rows = list(r.scalars().all())
     history = [{"role": m.role, "content": m.content} for m in history_rows[:-1]]
@@ -324,7 +371,16 @@ async def post_chat(deck_id: int, body: ChatRequest, session: AsyncSession = Dep
     except Exception as e:
         raise HTTPException(502, str(e)) from e
 
-    asst = ChatMessage(document_id=deck_id, role="assistant", content=reply)
+    now = datetime.now(timezone.utc)
+    cs.updated_at = now
+    if not cs.title or cs.title.strip() == "New chat":
+        try:
+            cs.title = await suggest_chat_session_title(body.message, reply)
+        except Exception:
+            preview = body.message.strip().replace("\n", " ")
+            cs.title = (preview[:80] + "…") if len(preview) > 80 else preview or "Chat"
+
+    asst = ChatMessage(session_id=session_id, role="assistant", content=reply)
     session.add(asst)
     await session.commit()
     await session.refresh(asst)
