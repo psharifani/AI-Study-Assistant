@@ -290,6 +290,39 @@ a {
   background: rgba(224, 122, 122, 0.12);
 }
 
+.btn.sm2-q-hard {
+  border-color: rgba(232, 237, 244, 0.55);
+  color: #e8edf4;
+  background: transparent;
+}
+
+.btn.sm2-q-hard:hover:not(:disabled) {
+  background: rgba(232, 237, 244, 0.08);
+  color: #ffffff;
+}
+
+.btn.sm2-q-good {
+  border-color: #5cbf7a;
+  color: #6bcb8f;
+  background: transparent;
+}
+
+.btn.sm2-q-good:hover:not(:disabled) {
+  background: rgba(107, 203, 143, 0.12);
+  color: #8fe0a8;
+}
+
+.btn.sm2-q-easy {
+  border-color: var(--accent);
+  color: #7eb8e8;
+  background: transparent;
+}
+
+.btn.sm2-q-easy:hover:not(:disabled) {
+  background: rgba(91, 159, 212, 0.15);
+  color: #a8d4ff;
+}
+
 .sm2-quality-legend {
   margin: 0.65rem 0 0;
   font-size: 0.8rem;
