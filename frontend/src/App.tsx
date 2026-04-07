@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Flashcard as FlashcardT, QuizQuestion, QuizResult } from "./api";
 import * as api from "./api";
 import { formatAddedDate, formatIntervalDays, formatNextRead } from "./flashcardMeta";
@@ -73,13 +73,11 @@ function DeckPicker({
   busy,
   onCreate,
   onOpen,
-  onDelete,
 }: {
   decks: api.DeckSummary[];
   busy: boolean;
   onCreate: (name: string) => Promise<void>;
   onOpen: (id: number) => void;
-  onDelete: (id: number) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const handleCreate = (e: React.FormEvent) => {
@@ -123,9 +121,6 @@ function DeckPicker({
                 <button type="button" className="btn btn-primary" onClick={() => onOpen(d.id)} disabled={busy}>
                   Open
                 </button>
-                <button type="button" className="btn btn-danger" onClick={() => void onDelete(d.id)} disabled={busy}>
-                  Delete
-                </button>
               </div>
             </div>
           ))
@@ -141,6 +136,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("flashcards");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deckMenuOpen, setDeckMenuOpen] = useState(false);
+  const deckMenuRef = useRef<HTMLDivElement>(null);
 
   const currentDeck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
 
@@ -161,6 +158,28 @@ export default function App() {
   useEffect(() => {
     void refreshDecks();
   }, [refreshDecks]);
+
+  useEffect(() => {
+    setDeckMenuOpen(false);
+  }, [deckId]);
+
+  useEffect(() => {
+    if (!deckMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (deckMenuRef.current && !deckMenuRef.current.contains(e.target as Node)) {
+        setDeckMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDeckMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deckMenuOpen]);
 
   const onCreateDeck = async (name: string) => {
     setBusy(true);
@@ -206,20 +225,6 @@ export default function App() {
     }
   };
 
-  const onDeleteDeckFromList = async (id: number) => {
-    if (!confirm("Delete this deck and all its flashcards and chat?")) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api.deleteDeck(id);
-      await refreshDecks();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -241,7 +246,6 @@ export default function App() {
             setDeckId(id);
             setTab("flashcards");
           }}
-          onDelete={onDeleteDeckFromList}
         />
       ) : (
         <>
@@ -261,9 +265,34 @@ export default function App() {
               {busy ? "…" : "Upload / replace material"}
               <input type="file" accept=".pdf,.txt,.md,.markdown" onChange={onUploadToDeck} disabled={busy} />
             </label>
-            <button type="button" className="btn btn-danger" onClick={onDeleteDeck} disabled={busy}>
-              Delete deck
-            </button>
+            <div className="deck-toolbar-menu" ref={deckMenuRef}>
+              <button
+                type="button"
+                className="btn deck-toolbar-more"
+                aria-expanded={deckMenuOpen}
+                aria-haspopup="menu"
+                aria-label="Deck options"
+                disabled={busy}
+                onClick={() => setDeckMenuOpen((o) => !o)}
+              >
+                ⋮
+              </button>
+              {deckMenuOpen && (
+                <div className="deck-toolbar-dropdown" role="menu" aria-label="Deck options">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="deck-toolbar-dropdown-item deck-toolbar-dropdown-danger"
+                    onClick={() => {
+                      setDeckMenuOpen(false);
+                      void onDeleteDeck();
+                    }}
+                  >
+                    Delete deck
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <nav className="tabs" aria-label="Study modes">
@@ -483,18 +512,31 @@ function FlashcardsPanel({
                   }}
                   aria-label={flipped ? "Hide answer" : "Show answer (question stays visible)"}
                 >
-                  <div className="review-block review-question">
-                    <div className="review-face-label">Question / term</div>
-                    <div className="review-face-text">{reviewCard.front}</div>
+                  <div className="review-face-panel">
+                    <div className="review-tab" id="review-tab-q">
+                      Question / term
+                    </div>
+                    <div
+                      className="review-face-body review-face-body-question"
+                      role="region"
+                      aria-labelledby="review-tab-q"
+                    >
+                      <div className="review-face-text">{reviewCard.front}</div>
+                    </div>
                   </div>
                   {flipped && (
-                    <>
-                      <div className="review-card-divider" aria-hidden />
-                      <div className="review-block review-answer">
-                        <div className="review-face-label">Answer</div>
+                    <div className="review-face-panel">
+                      <div className="review-tab" id="review-tab-a">
+                        Answer
+                      </div>
+                      <div
+                        className="review-face-body review-face-body-answer"
+                        role="region"
+                        aria-labelledby="review-tab-a"
+                      >
                         <div className="review-face-text">{reviewCard.back}</div>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
@@ -545,13 +587,25 @@ function FlashcardsPanel({
             Cards are saved for this document. Edit or add your own anytime.
           </p>
 
-          <div style={{ marginBottom: "1.25rem", padding: "1rem", background: "var(--surface2)", borderRadius: 8 }}>
+          <div className="flash-new-card-form">
             <span className="field-label">New flashcard</span>
-            <textarea placeholder="Front (question or term)" value={newFront} onChange={(e) => setNewFront(e.target.value)} />
-            <textarea placeholder="Back (answer or definition)" value={newBack} onChange={(e) => setNewBack(e.target.value)} />
-            <button type="button" className="btn btn-primary" onClick={addManual} disabled={busy}>
-              Add card
-            </button>
+            <div className="flash-new-card-row">
+              <textarea
+                className="flash-new-card-field"
+                placeholder="Front (question or term)"
+                value={newFront}
+                onChange={(e) => setNewFront(e.target.value)}
+              />
+              <textarea
+                className="flash-new-card-field"
+                placeholder="Back (answer or definition)"
+                value={newBack}
+                onChange={(e) => setNewBack(e.target.value)}
+              />
+              <button type="button" className="btn btn-primary flash-new-card-submit" onClick={addManual} disabled={busy}>
+                Add card
+              </button>
+            </div>
           </div>
 
           {loading ? (

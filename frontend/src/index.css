@@ -224,6 +224,7 @@ label.upload-btn input[type="file"] {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
   margin-top: auto;
   padding-top: 0.15rem;
 }
@@ -256,6 +257,55 @@ label.upload-btn input[type="file"] {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
+}
+
+.deck-toolbar-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.deck-toolbar-more {
+  min-width: 2.5rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.deck-toolbar-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 40;
+  min-width: 11rem;
+  padding: 0.25rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.deck-toolbar-dropdown-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+}
+
+.deck-toolbar-dropdown-item:hover {
+  background: var(--surface);
+}
+
+.deck-toolbar-dropdown-danger {
+  color: var(--danger);
 }
 
 .doc-select {
@@ -382,7 +432,9 @@ label.upload-btn input[type="file"] {
   background: var(--surface2);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 1rem;
+  padding: 1rem;
+  overflow: auto;
   transition: box-shadow 0.2s ease;
 }
 
@@ -390,40 +442,47 @@ label.upload-btn input[type="file"] {
   box-shadow: 0 0 0 1px var(--border);
 }
 
-.review-block {
-  padding: 1.25rem 1.35rem;
+.review-face-panel {
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
 }
 
-.review-block.review-question {
-  flex: 0 1 auto;
-}
-
-.review-block.review-answer {
-  flex: 1 1 auto;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.review-card-divider {
-  height: 1px;
-  background: var(--border);
-  flex-shrink: 0;
-}
-
-.review-face-label {
-  font-size: 0.7rem;
+.review-tab {
+  align-self: flex-start;
+  padding: 0.4rem 0.95rem;
+  font-size: 0.65rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   color: var(--muted);
-  margin-bottom: 0.6rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 1;
+}
+
+.review-face-body {
+  width: 100%;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0 10px 10px 10px;
+  background: var(--bg);
+  min-height: 3rem;
+}
+
+.review-face-body-answer {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .review-face-text {
   font-size: 1.05rem;
   line-height: 1.45;
-  flex: 1;
 }
 
 .review-hint {
@@ -563,6 +622,37 @@ label.upload-btn input[type="file"] {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1rem;
+}
+
+.flash-new-card-form {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: var(--surface2);
+  border-radius: 8px;
+}
+
+.flash-new-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.flash-new-card-field {
+  flex: 1 1 180px;
+  min-width: 0;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.flash-new-card-submit {
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 .flash-list {
