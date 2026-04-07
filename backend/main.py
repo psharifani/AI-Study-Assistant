@@ -321,6 +321,18 @@ async def create_chat_session(deck_id: int, session: AsyncSession = Depends(get_
     return cs
 
 
+@app.delete("/api/decks/{deck_id}/chat/sessions/{session_id}")
+async def delete_chat_session(
+    deck_id: int, session_id: int, session: AsyncSession = Depends(get_session)
+):
+    cs = await session.get(ChatSession, session_id)
+    if not cs or cs.document_id != deck_id:
+        raise HTTPException(404, "Chat session not found")
+    await session.delete(cs)
+    await session.commit()
+    return {"deleted": True}
+
+
 @app.get(
     "/api/decks/{deck_id}/chat/sessions/{session_id}/messages",
     response_model=list[ChatMessageOut],

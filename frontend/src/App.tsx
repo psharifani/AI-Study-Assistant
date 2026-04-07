@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Flashcard as FlashcardT, QuizQuestion, QuizResult } from "./api";
 import * as api from "./api";
 import { formatAddedDate, formatIntervalDays, formatNextRead } from "./flashcardMeta";
@@ -667,6 +669,89 @@ function formatChatSessionTime(iso: string | null | undefined): string {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function ChatSessionRow({
+  deckId,
+  session,
+  active,
+  onSelect,
+  onDeleted,
+  onError,
+}: {
+  deckId: number;
+  session: api.ChatSession;
+  active: boolean;
+  onSelect: () => void;
+  onDeleted: () => void;
+  onError: (s: string | null) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  const onDelete = async () => {
+    if (!confirm("Delete this chat and all its messages?")) return;
+    setMenuOpen(false);
+    onError(null);
+    try {
+      await api.deleteChatSession(deckId, session.id);
+      onDeleted();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Delete failed");
+    }
+  };
+
+  return (
+    <li className="chat-session-row">
+      <button type="button" className={`chat-session-item ${active ? "active" : ""}`} onClick={onSelect}>
+        <span className="chat-session-item-title">{session.title?.trim() || "New chat"}</span>
+        <span className="chat-session-item-meta">{formatChatSessionTime(session.updated_at ?? session.created_at)}</span>
+      </button>
+      <div className="deck-toolbar-menu chat-session-menu" ref={menuRef}>
+        <button
+          type="button"
+          className="btn deck-toolbar-more"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          aria-label={`Options for chat: ${session.title?.trim() || "New chat"}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((o) => !o);
+          }}
+        >
+          ⋮
+        </button>
+        {menuOpen && (
+          <div className="deck-toolbar-dropdown" role="menu" aria-label="Chat options">
+            <button
+              type="button"
+              role="menuitem"
+              className="deck-toolbar-dropdown-item deck-toolbar-dropdown-danger"
+              onClick={() => void onDelete()}
+            >
+              Delete chat
+            </button>
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | null) => void }) {
   const [sessions, setSessions] = useState<api.ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -734,6 +819,24 @@ function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
     }
   };
 
+  const afterSessionDeleted = async () => {
+    onError(null);
+    try {
+      let list = await api.fetchChatSessions(deckId);
+      if (list.length === 0) {
+        const created = await api.createChatSession(deckId);
+        list = [created];
+      }
+      setSessions(list);
+      setActiveSessionId((cur) => {
+        if (cur != null && list.some((x) => x.id === cur)) return cur;
+        return list[0]?.id ?? null;
+      });
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Failed to refresh chats");
+    }
+  };
+
   const send = async () => {
     const t = input.trim();
     if (!t || sending || activeSessionId == null) return;
@@ -774,16 +877,15 @@ function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
             </div>
             <ul className="chat-session-list">
               {sessions.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    className={`chat-session-item ${s.id === activeSessionId ? "active" : ""}`}
-                    onClick={() => setActiveSessionId(s.id)}
-                  >
-                    <span className="chat-session-item-title">{s.title?.trim() || "New chat"}</span>
-                    <span className="chat-session-item-meta">{formatChatSessionTime(s.updated_at ?? s.created_at)}</span>
-                  </button>
-                </li>
+                <ChatSessionRow
+                  key={s.id}
+                  deckId={deckId}
+                  session={s}
+                  active={s.id === activeSessionId}
+                  onSelect={() => setActiveSessionId(s.id)}
+                  onDeleted={() => void afterSessionDeleted()}
+                  onError={onError}
+                />
               ))}
             </ul>
           </aside>
@@ -798,7 +900,9 @@ function ChatPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
                   )}
                   {msgs.map((m) => (
                     <div key={m.id} className={`chat-bubble ${m.role === "user" ? "user" : "assistant"}`}>
-                      {m.content}
+                      <div className="chat-md">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                      </div>
                     </div>
                   ))}
                 </div>

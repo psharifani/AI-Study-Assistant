@@ -195,6 +195,13 @@ export async function fetchChatMessages(deckId: number, sessionId: number): Prom
   return handle(await fetch(`${API}/decks/${deckId}/chat/sessions/${sessionId}/messages`));
 }
 
+export async function deleteChatSession(deckId: number, sessionId: number): Promise<void> {
+  const res = await fetch(`${API}/decks/${deckId}/chat/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function sendChatMessage(deckId: number, sessionId: number, message: string): Promise<ChatMessage> {
   return handle(
     await fetch(`${API}/decks/${deckId}/chat/sessions/${sessionId}/messages`, {
