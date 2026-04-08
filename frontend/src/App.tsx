@@ -86,7 +86,6 @@ function StatsBarChartPanel({
   range,
   onRangeChange,
   rangeGroupLabel,
-  panelEnterDelaySec = 0,
 }: {
   title: string;
   hint: string;
@@ -96,15 +95,14 @@ function StatsBarChartPanel({
   range: ReviewStatsRange;
   onRangeChange: (r: ReviewStatsRange) => void;
   rangeGroupLabel: string;
-  /** Stagger second chart slightly after the first */
-  panelEnterDelaySec?: number;
 }) {
   const max = Math.max(1, ...bars.map((b) => b.count));
+  const chartFadeAfterMount = useRef(false);
+  useEffect(() => {
+    chartFadeAfterMount.current = true;
+  }, []);
   return (
-    <div
-      className="review-stats-panel review-stats-panel--fadein"
-      style={{ animationDelay: `${panelEnterDelaySec}s` }}
-    >
+    <div className="review-stats-panel review-stats-panel--fadein">
       <div className="review-stats-panel-head">
         <h4 className="review-stats-chart-title">{title}</h4>
         <div className="review-stats-toggle-group" role="group" aria-label={rangeGroupLabel}>
@@ -117,7 +115,12 @@ function StatsBarChartPanel({
       </div>
       <p className="review-stats-panel-hint empty-hint">{hint}</p>
       <div className="review-stats-vchart-xscroll">
-        <div key={listKey} className="review-stats-vchart" role="list" aria-label={`${title} bar chart`}>
+        <div
+          key={listKey}
+          className={`review-stats-vchart${chartFadeAfterMount.current ? " review-stats-vchart--fadein" : ""}`}
+          role="list"
+          aria-label={`${title} bar chart`}
+        >
           {bars.map((b) => (
             <div key={b.label} className="review-stats-vcol" role="listitem">
               <span className="review-stats-vcount">{b.count}</span>
@@ -193,7 +196,6 @@ function FlashcardReviewStats({ cards }: { cards: FlashcardT[] }) {
           range={intervalRange}
           onRangeChange={setIntervalRange}
           rangeGroupLabel="By interval chart time span"
-          panelEnterDelaySec={0.14}
           beyond={
             beyondInterval > 0 ? (
               <p className="review-stats-beyond empty-hint">

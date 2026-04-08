@@ -669,7 +669,8 @@ label.upload-btn input[type="file"] {
   flex-direction: column;
 }
 
-.review-stats-panel--fadein {
+/* Whole card when Statistics tab mounts; not remounted on 7d/30d/90d */
+.review-stats-panel.review-stats-panel--fadein {
   opacity: 0;
   animation: review-stats-panel-fadein 1.05s ease forwards;
 }
@@ -745,6 +746,15 @@ label.upload-btn input[type="file"] {
   color: var(--accent);
 }
 
+@keyframes review-stats-vchart-fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* Vertical bar chart (Statistics tab) — medium bar size (track dimensions unchanged) */
 .review-stats-vchart {
   display: flex;
@@ -758,6 +768,11 @@ label.upload-btn input[type="file"] {
   width: max-content;
   min-width: 100%;
   box-sizing: border-box;
+}
+
+.review-stats-vchart.review-stats-vchart--fadein {
+  opacity: 0;
+  animation: review-stats-vchart-fadein 1.05s ease forwards;
 }
 
 .review-stats-vcol {
@@ -828,7 +843,12 @@ label.upload-btn input[type="file"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .review-stats-panel--fadein {
+  .review-stats-panel.review-stats-panel--fadein {
+    animation: none;
+    opacity: 1;
+  }
+
+  .review-stats-vchart.review-stats-vchart--fadein {
     animation: none;
     opacity: 1;
   }
