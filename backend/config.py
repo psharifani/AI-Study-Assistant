@@ -17,6 +17,12 @@ def get_openai_credentials() -> tuple[str, str]:
     return key, model
 
 
+def get_openai_vision_model() -> str:
+    """Model for image transcription (must support vision). Defaults to gpt-4o-mini."""
+    load_dotenv(_env_path, override=True, encoding="utf-8-sig")
+    return (os.getenv("OPENAI_VISION_MODEL") or "gpt-4o-mini").strip()
+
+
 OPENAI_API_KEY, OPENAI_MODEL = get_openai_credentials()
 
 DATA_DIR = Path(__file__).resolve().parent / "data"

@@ -540,9 +540,14 @@ export default function App() {
               ← All decks
             </button>
             <h2 className="deck-toolbar-title">{currentDeck?.name ?? "Deck"}</h2>
-            <label className="upload-btn deck-toolbar-upload">
+            <label className="upload-btn deck-toolbar-upload" title="PDF, plain text/Markdown, or image (PNG, JPEG, WebP, GIF). Images are sent to OpenAI for transcription.">
               {busy ? "…" : "Upload / replace material"}
-              <input type="file" accept=".pdf,.txt,.md,.markdown" onChange={onUploadToDeck} disabled={busy} />
+              <input
+                type="file"
+                accept=".pdf,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+                onChange={onUploadToDeck}
+                disabled={busy}
+              />
             </label>
             <div className="deck-toolbar-menu" ref={deckMenuRef}>
               <button

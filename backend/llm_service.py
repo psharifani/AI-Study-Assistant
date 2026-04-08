@@ -1,11 +1,15 @@
+import base64
 import json
 import re
 import uuid
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from openai import AsyncOpenAI
+from PIL import Image
 
-from config import get_openai_credentials
+from config import get_openai_credentials, get_openai_vision_model
 
 STUDY_SYSTEM_PREFIX = """You are a study assistant for higher-education learners (psychology, political science, history, and similar).
 Your answers must be grounded ONLY in the STUDY DOCUMENT provided by the user in this conversation.
@@ -242,3 +246,87 @@ Be fair: accept paraphrases that show understanding. Reject empty or irrelevant 
     ok = bool(data.get("correct"))
     fb = str(data.get("brief_feedback", "")).strip()
     return ok, fb
+
+
+_IMAGE_TRANSCRIBE_SYSTEM = (
+    "You transcribe study images: printed text, slides, screenshots, and handwriting. "
+    "Output only the transcribed text. Do not summarize, explain, or add commentary."
+)
+
+_IMAGE_TRANSCRIBE_PROMPT = """Transcribe every word and symbol you can read in this image.
+
+Rules:
+- Preserve line breaks and simple paragraph breaks where they matter for readability.
+- If something is unreadable, write [illegible] for that fragment only.
+- If there is no text at all, reply with exactly: (no text detected)
+- Do not describe the image. Do not translate unless the user language is mixed; keep original language."""
+
+
+def _image_to_data_url_jpeg(path: Path) -> str:
+    """Resize very large photos and normalize to JPEG for the Vision API."""
+    raw = path.read_bytes()
+    if len(raw) > 32 * 1024 * 1024:
+        raise ValueError("Image file is too large (max ~32 MB). Try a smaller or cropped photo.")
+
+    img = Image.open(BytesIO(raw))
+    img.seek(0)
+
+    if img.mode in ("RGBA", "LA"):
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        alpha = img.split()[-1]
+        bg.paste(img, mask=alpha)
+        img = bg
+    elif img.mode == "P":
+        t = img.info.get("transparency")
+        if t is not None:
+            img = img.convert("RGBA")
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[-1])
+            img = bg
+        else:
+            img = img.convert("RGB")
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    max_side = 2048
+    w, h = img.size
+    if w > 0 and h > 0 and max(w, h) > max_side:
+        scale = max_side / max(w, h)
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=88, optimize=True)
+    b64 = base64.standard_b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}"
+
+
+async def transcribe_image_file(path: Path) -> str:
+    """Extract text from an image (printed or handwriting) via OpenAI vision."""
+    client, _ = _openai()
+    vision_model = get_openai_vision_model()
+    try:
+        data_url = _image_to_data_url_jpeg(path)
+    except (OSError, ValueError, Image.UnidentifiedImageError) as e:
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError("Could not read this file as an image.") from e
+
+    resp = await client.chat.completions.create(
+        model=vision_model,
+        messages=[
+            {"role": "system", "content": _IMAGE_TRANSCRIBE_SYSTEM},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": _IMAGE_TRANSCRIBE_PROMPT},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            },
+        ],
+        temperature=0.1,
+        max_tokens=4096,
+    )
+    text = (resp.choices[0].message.content or "").strip()
+    if not text or text == "(no text detected)":
+        return "[No text detected in image]"
+    return text

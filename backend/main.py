@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import UPLOADS_DIR, get_openai_credentials
 from database import get_session, init_db
-from document_extract import extract_text_from_file
+from document_extract import extract_text_from_file_async
 from llm_service import (
     generate_flashcards,
     generate_quiz,
@@ -102,7 +102,16 @@ async def upload_new_deck(
     finally:
         await file.close()
 
-    text = extract_text_from_file(stored, safe_name)
+    try:
+        text = await extract_text_from_file_async(stored, safe_name)
+    except ValueError as e:
+        if stored.is_file():
+            try:
+                stored.unlink()
+            except OSError:
+                pass
+        raise HTTPException(400, detail=str(e)) from e
+
     stem = Path(safe_name).stem or "Deck"
     doc = Document(filename=safe_name, stored_path=str(stored), content_text=text, name=stem)
     session.add(doc)
@@ -137,7 +146,16 @@ async def upload_deck_document(
     finally:
         await file.close()
 
-    text = extract_text_from_file(stored, safe_name)
+    try:
+        text = await extract_text_from_file_async(stored, safe_name)
+    except ValueError as e:
+        if stored.is_file():
+            try:
+                stored.unlink()
+            except OSError:
+                pass
+        raise HTTPException(400, detail=str(e)) from e
+
     doc.filename = safe_name
     doc.stored_path = str(stored)
     doc.content_text = text

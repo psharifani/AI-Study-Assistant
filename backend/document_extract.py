@@ -2,6 +2,9 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+# Image uploads: transcribed via OpenAI Vision in extract_text_from_file_async.
+IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif"})
+
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -89,3 +92,13 @@ def extract_text_from_file(path: Path, original_filename: str) -> str:
         return path.read_text(encoding="utf-8", errors="replace").strip()
     except OSError:
         return f"[Could not read file: {original_filename}]"
+
+
+async def extract_text_from_file_async(path: Path, original_filename: str) -> str:
+    """Like extract_text_from_file, but awaits vision transcription for image types."""
+    suffix = path.suffix.lower()
+    if suffix in IMAGE_EXTENSIONS:
+        from llm_service import transcribe_image_file
+
+        return await transcribe_image_file(path)
+    return extract_text_from_file(path, original_filename)
