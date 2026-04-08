@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Flashcard as FlashcardT, QuizQuestion, QuizResult } from "./api";
 import * as api from "./api";
 import { formatAddedDate, formatIntervalDays, formatNextRead } from "./flashcardMeta";
+import {
+  bucketByInterval,
+  bucketUpcomingReviews,
+  countScheduledBeyondWindow,
+  filterCardsWithinUpcomingWindow,
+  type ReviewStatsRange,
+} from "./flashcardReviewStats";
 
 type Tab = "flashcards" | "chat" | "quiz";
 
@@ -70,6 +77,136 @@ function nextFutureReview(cards: FlashcardT[]): Date | null {
   return new Date(Math.min(...times));
 }
 
+function StatsBarChartPanel({
+  title,
+  hint,
+  bars,
+  beyond,
+  listKey,
+  range,
+  onRangeChange,
+  rangeGroupLabel,
+  panelEnterDelaySec = 0,
+}: {
+  title: string;
+  hint: string;
+  bars: { label: string; count: number }[];
+  beyond?: ReactNode;
+  listKey: string;
+  range: ReviewStatsRange;
+  onRangeChange: (r: ReviewStatsRange) => void;
+  rangeGroupLabel: string;
+  /** Stagger second chart slightly after the first */
+  panelEnterDelaySec?: number;
+}) {
+  const max = Math.max(1, ...bars.map((b) => b.count));
+  return (
+    <div
+      className="review-stats-panel review-stats-panel--fadein"
+      style={{ animationDelay: `${panelEnterDelaySec}s` }}
+    >
+      <div className="review-stats-panel-head">
+        <h4 className="review-stats-chart-title">{title}</h4>
+        <div className="review-stats-toggle-group" role="group" aria-label={rangeGroupLabel}>
+          {(["7d", "30d", "90d"] as const).map((r) => (
+            <button key={r} type="button" className={range === r ? "active" : ""} onClick={() => onRangeChange(r)}>
+              {r === "7d" ? "7d" : r === "30d" ? "30d" : "90d"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="review-stats-panel-hint empty-hint">{hint}</p>
+      <div className="review-stats-vchart-xscroll">
+        <div key={listKey} className="review-stats-vchart" role="list" aria-label={`${title} bar chart`}>
+          {bars.map((b) => (
+            <div key={b.label} className="review-stats-vcol" role="listitem">
+              <span className="review-stats-vcount">{b.count}</span>
+              <div className="review-stats-vtrack" aria-hidden>
+                <div className="review-stats-vfill" style={{ height: `${(b.count / max) * 100}%` }} />
+              </div>
+              <div className="review-stats-vlabel-wrap">
+                <span className="review-stats-vlabel">{b.label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {beyond}
+    </div>
+  );
+}
+
+function FlashcardReviewStats({ cards }: { cards: FlashcardT[] }) {
+  const [upcomingRange, setUpcomingRange] = useState<ReviewStatsRange>("7d");
+  const [intervalRange, setIntervalRange] = useState<ReviewStatsRange>("7d");
+
+  const upcomingBars = useMemo(() => bucketUpcomingReviews(cards, upcomingRange), [cards, upcomingRange]);
+  const intervalSubset = useMemo(
+    () => filterCardsWithinUpcomingWindow(cards, intervalRange),
+    [cards, intervalRange]
+  );
+  const intervalBars = useMemo(() => bucketByInterval(intervalSubset), [intervalSubset]);
+  const beyondUpcoming = useMemo(
+    () => countScheduledBeyondWindow(cards, upcomingRange),
+    [cards, upcomingRange]
+  );
+  const beyondInterval = useMemo(
+    () => countScheduledBeyondWindow(cards, intervalRange),
+    [cards, intervalRange]
+  );
+
+  const upcomingKey = `up-${upcomingRange}-${upcomingBars.map((b) => b.count).join("-")}`;
+  const intervalKey = `iv-${intervalRange}-${intervalBars.map((b) => b.count).join("-")}`;
+
+  const windowLabel = (r: ReviewStatsRange) =>
+    r === "7d" ? "week" : r === "30d" ? "30-day window" : "90-day window";
+
+  return (
+    <section className="review-stats review-stats-dual" aria-labelledby="review-stats-heading">
+      <div className="review-stats-top">
+        <h3 id="review-stats-heading" className="review-stats-title">
+          Review statistics
+        </h3>
+      </div>
+      <div className="review-stats-charts-stack">
+        <StatsBarChartPanel
+          title="Upcoming"
+          hint="Next review date (local). First bar: today, overdue, and new cards."
+          bars={upcomingBars}
+          listKey={upcomingKey}
+          range={upcomingRange}
+          onRangeChange={setUpcomingRange}
+          rangeGroupLabel="Upcoming chart time span"
+          beyond={
+            beyondUpcoming > 0 ? (
+              <p className="review-stats-beyond empty-hint">
+                +{beyondUpcoming} more after this {windowLabel(upcomingRange)}
+              </p>
+            ) : undefined
+          }
+        />
+        <StatsBarChartPanel
+          title="By interval"
+          hint="Interval distribution for cards included in this time span (same window as Upcoming for the selected range)."
+          bars={intervalBars}
+          listKey={intervalKey}
+          range={intervalRange}
+          onRangeChange={setIntervalRange}
+          rangeGroupLabel="By interval chart time span"
+          panelEnterDelaySec={0.14}
+          beyond={
+            beyondInterval > 0 ? (
+              <p className="review-stats-beyond empty-hint">
+                +{beyondInterval} cards scheduled after this {windowLabel(intervalRange)} (excluded from chart)
+              </p>
+            ) : undefined
+          }
+        />
+      </div>
+    </section>
+  );
+}
+
 function DeckPicker({
   decks,
   busy,
@@ -84,11 +221,52 @@ function DeckPicker({
   onRename: (id: number, name: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [renaming, setRenaming] = useState<{ id: number; currentName: string } | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const closeRenameModal = useCallback(() => {
+    setRenaming(null);
+    setRenameDraft("");
+  }, []);
+
+  useEffect(() => {
+    if (!renaming) return;
+    renameInputRef.current?.focus();
+    renameInputRef.current?.select();
+  }, [renaming]);
+
+  useEffect(() => {
+    if (!renaming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeRenameModal();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [renaming, closeRenameModal]);
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     void onCreate(name.trim());
     setName("");
+  };
+
+  const handleRenameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renaming) return;
+    const t = renameDraft.trim();
+    if (!t) return;
+    if (t === renaming.currentName) {
+      closeRenameModal();
+      return;
+    }
+    try {
+      await onRename(renaming.id, t);
+      closeRenameModal();
+    } catch {
+      /* error surfaced by parent; keep modal open */
+    }
   };
 
   return (
@@ -125,11 +303,8 @@ function DeckPicker({
                     className="deck-card-rename"
                     disabled={busy}
                     onClick={() => {
-                      const next = window.prompt("Deck name", d.name);
-                      if (next == null) return;
-                      const t = next.trim();
-                      if (!t || t === d.name) return;
-                      void onRename(d.id, t);
+                      setRenaming({ id: d.id, currentName: d.name });
+                      setRenameDraft(d.name);
                     }}
                   >
                     Rename
@@ -148,6 +323,51 @@ function DeckPicker({
           )}
         </div>
       </div>
+
+      {renaming != null && (
+        <div
+          className="rename-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeRenameModal();
+          }}
+        >
+          <div
+            className="rename-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rename-deck-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="rename-deck-title" className="rename-modal-title">
+              Rename deck
+            </h2>
+            <form onSubmit={handleRenameSubmit} className="rename-modal-form">
+              <label className="rename-modal-label" htmlFor="rename-deck-input">
+                Deck name
+              </label>
+              <input
+                id="rename-deck-input"
+                ref={renameInputRef}
+                className="doc-select rename-modal-input"
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                disabled={busy}
+                maxLength={200}
+                autoComplete="off"
+              />
+              <div className="rename-modal-actions">
+                <button type="button" className="btn" onClick={closeRenameModal} disabled={busy}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busy || !renameDraft.trim()}>
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -296,7 +516,9 @@ export default function App() {
               await api.renameDeck(id, name);
               await refreshDecks();
             } catch (e) {
-              setError(e instanceof Error ? e.message : "Could not rename deck");
+              const msg = e instanceof Error ? e.message : "Could not rename deck";
+              setError(msg);
+              throw e;
             } finally {
               setBusy(false);
             }
@@ -395,10 +617,11 @@ function FlashcardsPanel({
   onRemoveDocument: () => void;
   documentBusy: boolean;
 }) {
-  const [section, setSection] = useState<"review" | "manage">("review");
+  const [section, setSection] = useState<"review" | "manage" | "statistics">("review");
   const [cards, setCards] = useState<FlashcardT[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [generatingFromDoc, setGeneratingFromDoc] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [draftFront, setDraftFront] = useState("");
   const [draftBack, setDraftBack] = useState("");
@@ -406,6 +629,7 @@ function FlashcardsPanel({
   const [newBack, setNewBack] = useState("");
 
   const [flipped, setFlipped] = useState(false);
+  const [reviewSessionActive, setReviewSessionActive] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -432,7 +656,19 @@ function FlashcardsPanel({
   const reviewCard = dueQueue[0] ?? null;
 
   useEffect(() => {
-    if (section !== "review") return;
+    if (section !== "review") {
+      setReviewSessionActive(false);
+    }
+  }, [section]);
+
+  useEffect(() => {
+    if (!reviewCard) {
+      setReviewSessionActive(false);
+    }
+  }, [reviewCard]);
+
+  useEffect(() => {
+    if (section !== "review" || !reviewSessionActive) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
       if (e.key === " " || e.key === "Enter") {
@@ -442,7 +678,7 @@ function FlashcardsPanel({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [section]);
+  }, [section, reviewSessionActive]);
 
   const submitFlashcardRating = async (rating: api.FlashcardRating) => {
     if (!reviewCard) return;
@@ -461,6 +697,7 @@ function FlashcardsPanel({
 
   const gen = async () => {
     setBusy(true);
+    setGeneratingFromDoc(true);
     onError(null);
     try {
       const next = await api.generateFlashcards(deckId);
@@ -468,6 +705,7 @@ function FlashcardsPanel({
     } catch (e) {
       onError(e instanceof Error ? e.message : "Generation failed");
     } finally {
+      setGeneratingFromDoc(false);
       setBusy(false);
     }
   };
@@ -532,6 +770,9 @@ function FlashcardsPanel({
         <button type="button" className={section === "manage" ? "active" : ""} onClick={() => setSection("manage")}>
           Manage flashcards
         </button>
+        <button type="button" className={section === "statistics" ? "active" : ""} onClick={() => setSection("statistics")}>
+          Statistics
+        </button>
       </nav>
 
       {section === "review" && (
@@ -553,6 +794,30 @@ function FlashcardsPanel({
                   Next card due: {nextDueLater.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                 </p>
               )}
+            </div>
+          ) : !reviewSessionActive ? (
+            <div className="review-wrap">
+              <div className="review-queue-frame">
+                <span className="field-label review-queue-frame-label">Due for review</span>
+                <div className="review-queue-count" aria-live="polite">
+                  {dueQueue.length}
+                </div>
+                <p className="review-queue-sublabel empty-hint">
+                  {dueQueue.length === 1 ? "card in your queue" : "cards in your queue"}
+                </p>
+              </div>
+              <div className="review-nav">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-wide"
+                  onClick={() => {
+                    setFlipped(false);
+                    setReviewSessionActive(true);
+                  }}
+                >
+                  Review
+                </button>
+              </div>
             </div>
           ) : (
             <div className="review-wrap">
@@ -656,6 +921,20 @@ function FlashcardsPanel({
         </>
       )}
 
+      {section === "statistics" && (
+        <>
+          {loading ? (
+            <p className="empty-hint">Loading…</p>
+          ) : cards.length === 0 ? (
+            <p className="empty-hint">
+              No flashcards yet. Switch to <strong>Manage flashcards</strong> to generate or add cards.
+            </p>
+          ) : (
+            <FlashcardReviewStats cards={cards} />
+          )}
+        </>
+      )}
+
       {section === "manage" && (
         <>
           <div className="flash-study-doc">
@@ -676,16 +955,24 @@ function FlashcardsPanel({
               {studyFilename.trim() ? studyFilename.trim() : "No document uploaded yet — use Upload / replace material above."}
             </p>
           </div>
-          <div className="toolbar">
+          <div className="toolbar flash-generate-toolbar">
             <button
               type="button"
               className={hasStudyMaterial ? "btn btn-primary" : "btn flash-generate-disabled"}
               onClick={() => void gen()}
               disabled={!hasStudyMaterial || busy || loading}
               title={!hasStudyMaterial ? "Upload study material first" : undefined}
+              aria-busy={generatingFromDoc}
             >
-              {busy ? "Generating…" : "Generate from document"}
+              Generate from document
             </button>
+            {generatingFromDoc && (
+              <span className="generate-dots" aria-hidden="true">
+                <span className="generate-dot" />
+                <span className="generate-dot" />
+                <span className="generate-dot" />
+              </span>
+            )}
           </div>
           <p className="empty-hint" style={{ marginBottom: "1rem" }}>
             Cards are saved for this document. Edit or add your own anytime.
@@ -1047,9 +1334,11 @@ function QuizPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
   const [saAnswers, setSaAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
 
   const generate = async () => {
     setBusy(true);
+    setGeneratingQuiz(true);
     onError(null);
     setResult(null);
     try {
@@ -1060,6 +1349,7 @@ function QuizPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
     } catch (e) {
       onError(e instanceof Error ? e.message : "Quiz generation failed");
     } finally {
+      setGeneratingQuiz(false);
       setBusy(false);
     }
   };
@@ -1124,9 +1414,22 @@ function QuizPanel({ deckId, onError }: { deckId: number; onError: (s: string | 
               style={{ width: 64, marginLeft: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "0.25rem" }}
             />
           </label>
-          <button type="button" className="btn btn-primary" onClick={generate} disabled={busy}>
-            {busy ? "…" : "Generate quiz"}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => void generate()}
+            disabled={busy}
+            aria-busy={generatingQuiz}
+          >
+            Generate quiz
           </button>
+          {generatingQuiz && (
+            <span className="generate-dots" aria-hidden="true">
+              <span className="generate-dot" />
+              <span className="generate-dot" />
+              <span className="generate-dot" />
+            </span>
+          )}
         </div>
       )}
 
