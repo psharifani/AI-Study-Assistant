@@ -627,6 +627,7 @@ function FlashcardsPanel({
   const [draftBack, setDraftBack] = useState("");
   const [newFront, setNewFront] = useState("");
   const [newBack, setNewBack] = useState("");
+  const [manageSearch, setManageSearch] = useState("");
 
   const [flipped, setFlipped] = useState(false);
   const [reviewSessionActive, setReviewSessionActive] = useState(false);
@@ -660,6 +661,21 @@ function FlashcardsPanel({
       setReviewSessionActive(false);
     }
   }, [section]);
+
+  useEffect(() => {
+    if (section !== "manage") {
+      setManageSearch("");
+    }
+  }, [section]);
+
+  const manageFilteredCards = useMemo(() => {
+    const q = manageSearch.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((c) => {
+      const src = c.source_document_name?.toLowerCase() ?? "";
+      return c.front.toLowerCase().includes(q) || c.back.toLowerCase().includes(q) || src.includes(q);
+    });
+  }, [cards, manageSearch]);
 
   useEffect(() => {
     if (!reviewCard) {
@@ -999,13 +1015,35 @@ function FlashcardsPanel({
             </div>
           </div>
 
+          {!loading && cards.length > 0 && (
+            <div className="flash-manage-search">
+              <label className="field-label" htmlFor="flash-manage-search-input">
+                Search cards
+              </label>
+              <input
+                id="flash-manage-search-input"
+                type="search"
+                className="doc-select flash-manage-search-input"
+                placeholder="Search front, back, or source…"
+                value={manageSearch}
+                onChange={(e) => setManageSearch(e.target.value)}
+                autoComplete="off"
+                aria-controls="flash-manage-list"
+              />
+            </div>
+          )}
+
           {loading ? (
             <p className="empty-hint">Loading…</p>
           ) : cards.length === 0 ? (
             <p className="empty-hint">No flashcards yet. Generate from your document or add manually.</p>
+          ) : manageFilteredCards.length === 0 ? (
+            <p className="empty-hint" id="flash-manage-list">
+              No cards match your search.
+            </p>
           ) : (
-            <div className="flash-list">
-              {cards.map((c) => (
+            <div className="flash-list" id="flash-manage-list">
+              {manageFilteredCards.map((c) => (
                 <div key={c.id} className="flash-card">
                   <FlashcardMetaLine card={c} />
                   {c.source_document_name?.trim() ? (

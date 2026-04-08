@@ -1219,6 +1219,28 @@ label.upload-btn input[type="file"] {
   align-self: center;
 }
 
+.flash-manage-search {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface2);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.flash-manage-search .field-label {
+  margin: 0;
+}
+
+.flash-manage-search-input {
+  width: 100%;
+  max-width: 28rem;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
 .flash-list {
   display: flex;
   flex-direction: column;
