@@ -4,3 +4,7 @@ backend/data/
 frontend/node_modules/
 frontend/dist/
 frontend/.env
+
+# SRS (kept locally only; not pushed to GitHub)
+/SRS_AI_Study_Assistant.txt
+/SRS_AI_Study_Assistant.html
