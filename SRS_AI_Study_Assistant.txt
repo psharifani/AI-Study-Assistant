@@ -1,0 +1,370 @@
+Software Requirements Specification (SRS)
+AI Study Assistant
+Version: 1.0
+Date: 6 April 2026
+Author / Student: MohammadHossein Sharifani
+Course: Software Engineering Project
+
+────────────────────────────────────────────────────────────────────────────
+WHERE TO ADD SCREENSHOTS (quick guide)
+• Section 4.2 — [SCREENSHOT: Simple context diagram or one slide showing user + browser + backend + OpenAI]
+• Section 4.3 — [SCREENSHOT: Main UI — deck list or home]
+• Section 7.1 — [SCREENSHOT: Flashcard review screen] [SCREENSHOT: Learning chat tab] [SCREENSHOT: Quiz tab] [SCREENSHOT: Statistics / upload area if applicable]
+• Section 8.1 — [SCREENSHOT: Optional architecture block diagram — draw in Drawings or paste exported PNG]
+• Section 9.2.2 — [SCREENSHOT: Same as data-flow figure if you use one diagram only]
+• Section 10.1 — [SCREENSHOT: DB schema from your tool OR paste the table section as-is]
+• Appendix — [SCREENSHOT: Postman or browser Network tab showing /api/health JSON] (optional)
+────────────────────────────────────────────────────────────────────────────
+
+Table of Contents
+1. Introduction
+2. Problem Statement
+3. Target Users
+4. System Overview
+5. Functional Requirements
+6. Non-Functional Requirements
+7. Interface Requirements
+8. System Architecture
+9. System Models and Diagrams
+10. Database Design
+11. Technology Stack
+12. Security Requirements
+13. Appendix
+
+
+================================================================================
+1. Introduction
+================================================================================
+
+1.1 Purpose
+This Software Requirements Specification (SRS) describes the requirements for the AI Study Assistant: a web application that helps a learner manage study decks, upload study materials, generate and review flashcards, chat with an AI tutor in the context of a deck, take a mock quiz, and view review statistics. The document is intended for course documentation, future maintenance, and as a basis for testing and design.
+
+1.2 Scope
+The system is delivered as:
+• A browser-based frontend (single-page application) served in development via Vite.
+• A backend REST API (FastAPI) using SQLite for persistence and optional file storage for uploaded documents.
+• Integration with the OpenAI API for generation, chat, quiz, grading, and image/PDF vision transcription where applicable.
+
+Out of scope for this SRS (unless extended later): multi-user accounts and authentication, cloud hosting specifics, mobile native apps, and institutional LMS integration.
+
+1.3 Definitions, Acronyms, and Abbreviations
+
+Term / Acronym    Meaning
+API               Application Programming Interface; HTTP JSON endpoints under /api/
+SRS               Software Requirements Specification
+SM-2              SuperMemo-2; spaced repetition algorithm used for flashcard scheduling
+Deck              A logical collection of study material and flashcards (stored as a “document” record)
+Flashcard         A card with front/back text, scheduled with SM-2 fields
+OpenAI / LLM      Large language model accessed via OpenAI’s HTTP API
+PDF               Portable Document Format; text may be embedded or scanned
+Vision API        OpenAI model capability that accepts images for transcription
+CORS              Cross-Origin Resource Sharing; browser security for API calls
+SQLite            Embedded relational database used by the backend
+
+1.4 References
+• OpenAI API documentation (models, chat completions, vision): https://platform.openai.com/docs
+• FastAPI documentation: https://fastapi.tiangolo.com/
+• React documentation: https://react.dev/
+• SM-2 spaced repetition (conceptual): literature on SuperMemo / spaced repetition
+
+1.5 Overview
+The remainder of this document states the problem, users, system overview, detailed functional and non-functional requirements, interfaces, architecture, data model, technology choices, security considerations, and an API summary.
+
+
+================================================================================
+2. Problem Statement
+================================================================================
+
+2.1 Current Challenges
+Students often need to turn readings (PDF, text, or photos of notes) into reviewable formats. Doing this manually is slow; keeping track of what to review next is error-prone. Generic chat tools are not tied to the learner’s own uploaded material. There is a need for a focused tool that combines material ingestion, AI-assisted generation, structured review (flashcards + SM-2), practice quizzes, and simple progress visibility.
+
+2.2 Solution Overview
+The AI Study Assistant lets the user create decks, attach study files (including images for vision-based transcription), generate flashcards and quizzes from extracted text, review flashcards with four-button SM-2 scheduling, converse with a tutor that can use deck context, and run a mock test graded by rules and (for short answers) AI assistance.
+
+
+================================================================================
+3. Target Users
+================================================================================
+
+3.1 Primary Users
+• University or college students (e.g. psychology, political science, history) who want to study from their own files.
+• The system is designed for a single learner on a local or personal setup; there is no multi-tenant account model in the described version.
+
+3.2 User Roles and Permissions
+• Single implicit role: the end user has full access to all decks and features exposed by the UI.
+• No login, roles, or permission matrix is implemented in the described version; all API calls are trusted from the configured frontend origin.
+
+
+================================================================================
+4. System Overview
+================================================================================
+
+4.1 System Purpose
+Support the study workflow: organize decks → upload material → generate or create flashcards → review on a schedule → optionally learn via chat and quiz → view statistics.
+
+4.2 System Context
+[SCREENSHOT: Place a simple diagram here: Student → Browser (React) → HTTP → FastAPI backend → SQLite / local files; Backend → HTTPS → OpenAI API.]
+
+Narrative: The user interacts only with the web UI. The UI calls the backend REST API. The backend stores data in SQLite and files on disk, and calls OpenAI when generation, chat, quiz, grading, or vision transcription is required.
+
+4.3 Key Features
+• Deck management: create, rename, delete, list; upload or replace study documents; remove document.
+• Material extraction: PDF text extraction (with vision fallback for sparse text), plain text/Markdown, image upload transcribed via vision model.
+• Flashcards: manual create/edit/delete; AI generation from deck material; SM-2 review (again / hard / good / easy).
+• Learning chat: threaded sessions per deck; AI replies using optional deck text as context.
+• Quiz: generate multiple-choice and short-answer questions from material; grade MC deterministically; grade short answers via AI.
+• Statistics: review-oriented charts (e.g. upcoming reviews by day, interval distribution) with selectable time windows.
+
+[SCREENSHOT: Optional collage of 2–3 UI tabs showing key features.]
+
+
+================================================================================
+5. Functional Requirements
+================================================================================
+
+ID      Requirement
+FR-01   The system shall allow the user to create a named deck (study container).
+FR-02   The system shall allow uploading a new deck with an initial file in one step.
+FR-03   The system shall list all decks with name, preview of content, and whether study material exists.
+FR-04   The user shall open a deck and see its study filename and material preview context.
+FR-05   The user shall upload or replace a study document for a deck (PDF, text/Markdown, common image types).
+FR-06   The system shall extract text from PDFs using embedded text layers; if text is below a configured length threshold, the system may rasterize pages and transcribe via OpenAI vision.
+FR-07   The system shall transcribe image uploads using an OpenAI vision-capable model.
+FR-08   The user shall remove the attached document from a deck without deleting the deck itself.
+FR-09   The user shall rename and delete a deck; deleting a deck removes associated stored files as applicable.
+FR-10   The user shall create flashcards manually (front and back).
+FR-11   The system shall generate flashcards from deck study text via OpenAI, appending to existing cards.
+FR-12   The user shall list, edit, and delete flashcards in a deck.
+FR-13   The user shall submit a review rating (again, hard, good, easy) and the system shall update SM-2 fields and next review time.
+FR-14   The user shall start a new learning chat session per deck and send messages; the assistant reply shall use deck material as optional context per product rules.
+FR-15   The user shall list and delete chat sessions; list messages in a session.
+FR-16   The user shall generate a mock quiz (counts of multiple-choice and short-answer) from deck material via OpenAI.
+FR-17   The user shall submit quiz answers and receive a score; multiple-choice graded by correct index; short answers graded via AI.
+FR-18   The system shall expose a health endpoint reporting API readiness and whether OpenAI credentials are configured.
+FR-19   The UI shall provide tabs or sections for flashcards, chat, quiz, and statistics as implemented in the product.
+FR-20   Statistics views shall support configurable time ranges and display charts consistent with stored scheduling data.
+
+(Traceability: requirements map to routes in Appendix 13.1.)
+
+
+================================================================================
+6. Non-Functional Requirements
+================================================================================
+
+6.1 Performance Requirements
+• NFR-P1: Typical API operations (list decks, get deck, list flashcards) should complete within a few hundred milliseconds on a modern PC with local SQLite.
+• NFR-P2: OpenAI-dependent operations (generation, long chat) are bounded by network latency and model speed; the UI should indicate loading state.
+• NFR-P3: Large PDF vision fallback may process up to a capped number of pages to control cost and time.
+
+6.2 Usability Requirements
+• NFR-U1: The interface shall use clear labels for review buttons and deck actions.
+• NFR-U2: Error messages from the API should be surfaced to the user when requests fail.
+
+6.3 Reliability Requirements
+• NFR-R1: Study data shall persist in SQLite across restarts.
+• NFR-R2: Uploaded files shall be stored under a configurable data directory; failed uploads should not leave inconsistent deck records when the API returns an error.
+
+6.4 Security Requirements
+• NFR-S1: The API shall restrict CORS to configured development origins unless changed for deployment.
+• NFR-S2: API keys shall reside in server-side environment configuration, not in client source.
+
+6.5 Compatibility Requirements
+• NFR-C1: The web UI shall target modern evergreen browsers (Chrome, Edge, Firefox, Safari recent versions).
+• NFR-C2: Backend shall run on Python 3 with documented dependencies.
+
+6.6 Maintainability Requirements
+• NFR-M1: The backend shall separate routes, schemas, services, and persistence layers for clarity.
+• NFR-M2: Automated unit and end-to-end API tests shall exist for core flows (as implemented in the project).
+
+6.7 Portability Requirements
+• NFR-P4: The application shall run on Windows/macOS/Linux for development with documented commands for frontend and backend.
+
+
+================================================================================
+7. Interface Requirements
+================================================================================
+
+7.1 User Interfaces
+The client shall provide:
+• Deck picker and deck workspace with upload/replace/remove document actions.
+• Flashcard study view with flip/reveal and four review actions.
+• Learning chat panel with session list and message thread.
+• Quiz generation and attempt UI.
+• Statistics charts with range selection.
+
+[SCREENSHOT: Deck / toolbar area]
+[SCREENSHOT: Flashcard review]
+[SCREENSHOT: Chat panel]
+[SCREENSHOT: Quiz]
+[SCREENSHOT: Statistics]
+
+7.2 Hardware Interfaces
+• No special hardware is required beyond a standard PC or laptop with keyboard, pointing device, and display.
+• Optional: microphone/camera are not required by the described system.
+
+7.3 Software Interfaces
+• Frontend to Backend: JSON over HTTP REST; base URL configured via environment (e.g. VITE_API_PROXY in development).
+• Backend to OpenAI: HTTPS JSON API (chat completions / vision as implemented).
+• Backend to filesystem: read/write uploads under the configured uploads directory.
+• Backend to SQLite: async SQLAlchemy with aiosqlite driver.
+
+7.4 Communication Interfaces
+• Protocol: HTTP/HTTPS.
+• Typical development setup: frontend dev server (e.g. port 5173) proxying or calling backend (e.g. port 8080).
+
+
+================================================================================
+8. System Architecture
+================================================================================
+
+8.1 Architecture Overview
+A layered architecture: React UI → REST API (FastAPI) → services (LLM, document extraction, SM-2) → SQLAlchemy models → SQLite; file storage for uploads.
+
+[SCREENSHOT: Optional single architecture diagram — boxes: UI | API | Services | DB | Files | OpenAI]
+
+8.2 Component Architecture
+• Frontend: React + TypeScript + Vite; calls API for all data.
+• Backend: FastAPI application module with route handlers; Pydantic schemas for validation.
+• Services: OpenAI client wrapper for generation, chat, quiz, grading, vision transcription; document extraction (PDF, images); SM-2 application for reviews.
+• Persistence: SQLAlchemy ORM models; async sessions.
+
+8.3 Data Flow
+1) User action in UI → HTTP request → route handler → database and/or OpenAI → JSON response → UI update.
+2) File upload → stream to disk → extract/transcribe text → store in document row.
+
+8.4 Technology Stack
+(See Section 11 for detail.)
+
+
+================================================================================
+9. System Models and Diagrams
+================================================================================
+
+9.1 Overview
+This section summarizes design views without including UML class/sequence diagrams in this document (per project documentation scope).
+
+9.2 Architectural Design
+
+9.2.1 Rationale
+A single-page app with a separate API backend keeps concerns clear, allows independent testing of the API, and fits classroom deployment (local run).
+
+9.2.2 High-Level Data Flow
+[SCREENSHOT: Same as 4.2 or 8.1 if you prefer one figure — user → UI → API → (SQLite | files | OpenAI).]
+
+Text description: User operations mutate deck, flashcard, chat, or quiz state through REST; long-running AI calls return generated content to be stored or displayed.
+
+9.3 UML Diagrams
+Not included in this SRS (sequence diagrams and UML diagrams omitted by project scope). If required by course later, class and sequence diagrams can be added as an appendix revision.
+
+9.4 Non-Functional Considerations
+Performance, security, and reliability constraints are aligned with Sections 6 and 12; deployment assumptions are local/personal unless extended.
+
+
+================================================================================
+10. Database Design
+================================================================================
+
+10.1 Database Schema
+Logical tables (SQLite):
+
+documents
+• id (PK), name, filename, stored_path, content_text, created_at
+
+flashcards
+• id (PK), document_id (FK → documents.id), front, back, sort_order
+• sm2_ease_factor, sm2_interval_days, sm2_repetitions, sm2_next_review_at, created_at, source_document_name (optional)
+
+chat_sessions
+• id (PK), document_id (FK), title, created_at, updated_at
+
+chat_messages
+• id (PK), session_id (FK), document_id (FK), role, content, created_at
+
+[SCREENSHOT: Optional — ER diagram or screenshot of schema from DB tool]
+
+10.2 Indexes
+The implementation relies on SQLite defaults and primary/foreign keys; additional indexes may be added for scale-up (not required for the described single-user scope).
+
+
+================================================================================
+11. Technology Stack
+================================================================================
+
+11.1 Frontend Technologies
+• React 18
+• TypeScript
+• Vite
+• react-markdown (and related) for rendered content where used
+
+11.2 Backend Technologies
+• Python 3
+• FastAPI
+• Uvicorn
+• SQLAlchemy 2 (async) + aiosqlite
+• Pydantic v2 schemas
+• PyMuPDF / pypdf for PDF handling; Pillow for image normalization; OpenAI Python SDK
+
+11.3 Development and Deployment
+• Frontend: npm (install, dev, build)
+• Backend: pip / requirements.txt, uvicorn for ASGI
+• Environment: .env for OPENAI_API_KEY and model names; optional STUDY_ASSISTANT_DATA_DIR for tests
+
+11.4 Hosting and Deployment
+• Described for local development; production hosting (HTTPS, process manager, reverse proxy) is left to future work.
+
+
+================================================================================
+12. Security Requirements
+================================================================================
+
+12.1 Authentication Security
+The described system does not implement user authentication; it is suitable for single-user local use. Any network-exposed deployment should add authentication and TLS.
+
+12.2 Authorization Security
+No role-based access control; all endpoints assume a trusted client origin.
+
+12.3 Data Security
+• API keys must not be committed to source control; use environment files excluded by .gitignore.
+• User study content is stored locally in SQLite and on disk; users are responsible for device security.
+
+12.4 Input Validation
+• Pydantic models validate JSON bodies (deck names, flashcard fields, chat messages, quiz payloads).
+• File uploads use server-side validation of presence and safe filename handling.
+
+
+================================================================================
+13. Appendix
+================================================================================
+
+13.1 API Endpoint Summary
+
+Method  Path (prefix /api)                         Purpose
+GET     /health                                    Liveness + OpenAI configured flag
+POST    /decks                                     Create empty deck
+POST    /decks/upload                              Create deck from uploaded file
+GET     /decks                                     List decks
+GET     /decks/{deck_id}                           Get deck
+PUT     /decks/{deck_id}                           Rename deck
+DELETE  /decks/{deck_id}                           Delete deck
+POST    /decks/{deck_id}/document                  Upload/replace document
+DELETE  /decks/{deck_id}/document                  Remove document
+GET     /decks/{deck_id}/flashcards                List flashcards
+POST    /decks/{deck_id}/flashcards                Create flashcard
+POST    /decks/{deck_id}/flashcards/generate       AI-generate flashcards
+POST    /decks/{deck_id}/flashcards/{fc_id}/review Submit SM-2 review
+PUT     /decks/{deck_id}/flashcards/{fc_id}        Update flashcard
+DELETE  /decks/{deck_id}/flashcards/{fc_id}       Delete flashcard
+GET     /decks/{deck_id}/chat/sessions             List chat sessions
+POST    /decks/{deck_id}/chat/sessions             Create chat session
+DELETE  /decks/{deck_id}/chat/sessions/{session_id} Delete session
+GET     /decks/{deck_id}/chat/sessions/{session_id}/messages  List messages
+POST    /decks/{deck_id}/chat/sessions/{session_id}/messages Send message (AI reply)
+POST    /decks/{deck_id}/quiz/generate             Generate quiz
+POST    /decks/{deck_id}/quiz/grade                Grade quiz attempt
+
+13.2 Glossary
+• Deck: study container (document) holding material and related flashcards and chats.
+• Vision transcription: converting image pixels to text using a multimodal model.
+• Mock quiz: practice test generated from deck material, not a proctored exam.
+
+— End of SRS —

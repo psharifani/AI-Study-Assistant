@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SRS — AI Study Assistant</title>
+  <style>
+    body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.35; max-width: 8in; margin: 1in auto; color: #000; }
+    h1 { font-size: 18pt; text-align: center; margin-bottom: 0.2em; }
+    .subtitle { text-align: center; font-size: 12pt; margin: 0.3em 0; }
+    .meta { text-align: center; font-size: 11pt; margin-bottom: 1.5em; }
+    h2 { font-size: 14pt; border-bottom: 1px solid #333; padding-bottom: 4px; margin-top: 1.4em; }
+    h3 { font-size: 12pt; margin-top: 1em; margin-bottom: 0.4em; }
+    h4 { font-size: 11pt; margin-top: 0.9em; margin-bottom: 0.3em; }
+    p { margin: 0.5em 0; }
+    ul, ol { margin: 0.4em 0 0.6em 1.2em; }
+    li { margin: 0.25em 0; }
+    table { border-collapse: collapse; width: 100%; margin: 0.6em 0; font-size: 10pt; }
+    th, td { border: 1px solid #666; padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+    .screenshot-note { background: #f9f9f9; padding: 10px; border-left: 4px solid #444; margin: 1em 0; font-size: 10pt; }
+    .toc { margin: 1em 0; }
+    .toc li { margin: 0.2em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Software Requirements Specification (SRS)</h1>
+<p class="subtitle"><strong>AI Study Assistant</strong></p>
+<p class="meta">
+  <strong>Version:</strong> 1.0 &nbsp;|&nbsp; <strong>Date:</strong> 6 April 2026<br />
+  <strong>Author / Student:</strong> MohammadHossein Sharifani<br />
+  <strong>Course:</strong> Software Engineering Project
+</p>
+
+<div class="screenshot-note">
+  <strong>Where to add screenshots (quick guide)</strong>
+  <ul>
+    <li><strong>Section 4.2</strong> — Context diagram: user → browser → backend → SQLite/files → OpenAI</li>
+    <li><strong>Section 4.3</strong> — Main UI (deck list / home)</li>
+    <li><strong>Section 7.1</strong> — Flashcard review, Learning chat, Quiz, Statistics (and deck/upload if needed)</li>
+    <li><strong>Section 8.1</strong> — Optional architecture block diagram</li>
+    <li><strong>Section 9.2.2</strong> — Same data-flow figure as 4.2 if you use one diagram only</li>
+    <li><strong>Section 10.1</strong> — DB schema / ER diagram (optional)</li>
+    <li><strong>Appendix</strong> — Optional: <code>/api/health</code> JSON in browser or Postman</li>
+  </ul>
+</div>
+
+<h2>Table of Contents</h2>
+<ol class="toc">
+  <li>Introduction</li><li>Problem Statement</li><li>Target Users</li><li>System Overview</li>
+  <li>Functional Requirements</li><li>Non-Functional Requirements</li><li>Interface Requirements</li>
+  <li>System Architecture</li><li>System Models and Diagrams</li><li>Database Design</li>
+  <li>Technology Stack</li><li>Security Requirements</li><li>Appendix</li>
+</ol>
+
+<h2>1. Introduction</h2>
+
+<h3>1.1 Purpose</h3>
+<p>This Software Requirements Specification (SRS) describes the requirements for the <strong>AI Study Assistant</strong>: a web application that helps a learner manage study decks, upload study materials, generate and review flashcards, chat with an AI tutor in the context of a deck, take a mock quiz, and view review statistics. The document is intended for course documentation, future maintenance, and as a basis for testing and design.</p>
+
+<h3>1.2 Scope</h3>
+<p>The system is delivered as:</p>
+<ul>
+  <li><strong>Browser-based frontend</strong> (single-page application) served in development via Vite.</li>
+  <li><strong>Backend REST API</strong> (FastAPI) using SQLite for persistence and optional file storage for uploaded documents.</li>
+  <li><strong>Integration with the OpenAI API</strong> for generation, chat, quiz, grading, and image/PDF vision transcription where applicable.</li>
+</ul>
+<p><strong>Out of scope</strong> (unless extended later): multi-user accounts and authentication, cloud hosting specifics, mobile native apps, and institutional LMS integration.</p>
+
+<h3>1.3 Definitions, Acronyms, and Abbreviations</h3>
+<table>
+  <tr><th>Term / Acronym</th><th>Meaning</th></tr>
+  <tr><td>API</td><td>Application Programming Interface; HTTP JSON endpoints under <code>/api/</code></td></tr>
+  <tr><td>SRS</td><td>Software Requirements Specification</td></tr>
+  <tr><td>SM-2</td><td>SuperMemo-2; spaced repetition algorithm used for flashcard scheduling</td></tr>
+  <tr><td>Deck</td><td>A logical collection of study material and flashcards (stored as a “document” record)</td></tr>
+  <tr><td>Flashcard</td><td>A card with front/back text, scheduled with SM-2 fields</td></tr>
+  <tr><td>OpenAI / LLM</td><td>Large language model accessed via OpenAI’s HTTP API</td></tr>
+  <tr><td>PDF</td><td>Portable Document Format; text may be embedded or scanned</td></tr>
+  <tr><td>Vision API</td><td>OpenAI model capability that accepts images for transcription</td></tr>
+  <tr><td>CORS</td><td>Cross-Origin Resource Sharing; browser security for API calls</td></tr>
+  <tr><td>SQLite</td><td>Embedded relational database used by the backend</td></tr>
+</table>
+
+<h3>1.4 References</h3>
+<ul>
+  <li>OpenAI API documentation: <a href="https://platform.openai.com/docs">https://platform.openai.com/docs</a></li>
+  <li>FastAPI documentation: <a href="https://fastapi.tiangolo.com/">https://fastapi.tiangolo.com/</a></li>
+  <li>React documentation: <a href="https://react.dev/">https://react.dev/</a></li>
+  <li>SM-2 spaced repetition (conceptual): literature on SuperMemo / spaced repetition</li>
+</ul>
+
+<h3>1.5 Overview</h3>
+<p>The remainder of this document states the problem, users, system overview, detailed functional and non-functional requirements, interfaces, architecture, data model, technology choices, security considerations, and an API summary.</p>
+
+<h2>2. Problem Statement</h2>
+
+<h3>2.1 Current Challenges</h3>
+<p>Students often need to turn readings (PDF, text, or photos of notes) into reviewable formats. Doing this manually is slow; keeping track of what to review next is error-prone. Generic chat tools are not tied to the learner’s own uploaded material. There is a need for a focused tool that combines material ingestion, AI-assisted generation, structured review (flashcards + SM-2), practice quizzes, and simple progress visibility.</p>
+
+<h3>2.2 Solution Overview</h3>
+<p>The AI Study Assistant lets the user create decks, attach study files (including images for vision-based transcription), generate flashcards and quizzes from extracted text, review flashcards with four-button SM-2 scheduling, converse with a tutor that can use deck context, and run a mock test graded by rules and (for short answers) AI assistance.</p>
+
+<h2>3. Target Users</h2>
+
+<h3>3.1 Primary Users</h3>
+<ul>
+  <li>University or college students (e.g. psychology, political science, history) who want to study from their own files.</li>
+  <li>The system is designed for a <strong>single learner</strong> on a local or personal setup; there is no multi-tenant account model in the described version.</li>
+</ul>
+
+<h3>3.2 User Roles and Permissions</h3>
+<ul>
+  <li><strong>Single implicit role:</strong> the end user has full access to all decks and features exposed by the UI.</li>
+  <li><strong>No login</strong>, roles, or permission matrix is implemented in the described version; all API calls are trusted from the configured frontend origin.</li>
+</ul>
+
+<h2>4. System Overview</h2>
+
+<h3>4.1 System Purpose</h3>
+<p>The AI Study Assistant is a full-stack web application. Its main goals are:</p>
+<ol>
+  <li><strong>Organize decks and material:</strong> Let learners create decks, upload or replace study documents (PDF, text/Markdown, images), and keep content tied to each deck.</li>
+  <li><strong>Generate and practice:</strong> Support manual or AI-generated flashcards, mock quizzes, and a learning chat that can use deck text as optional context.</li>
+  <li><strong>Schedule reviews:</strong> Apply SM-2 scheduling with four review actions (again, hard, good, easy) so cards have sensible next review times.</li>
+  <li><strong>Show progress:</strong> Provide statistics views (e.g. upcoming reviews, interval distribution) with selectable time ranges.</li>
+</ol>
+
+<h3>4.2 System Context</h3>
+<p><em>[SCREENSHOT: Simple diagram — Student → Browser (React) → HTTP → FastAPI → SQLite / local files; Backend → HTTPS → OpenAI API.]</em></p>
+<p>The major technical components are:</p>
+<ul>
+  <li><strong>Frontend:</strong> React + TypeScript + Vite (single-page application).</li>
+  <li><strong>Backend:</strong> Python FastAPI REST API (ASGI, Uvicorn).</li>
+  <li><strong>Database:</strong> SQLite (relational data via SQLAlchemy async).</li>
+  <li><strong>File storage:</strong> Local uploads directory under configurable data path.</li>
+  <li><strong>External AI:</strong> OpenAI HTTP API for generation, chat, quiz, grading, and vision transcription.</li>
+</ul>
+<p>Narrative: The user interacts only with the web UI. The UI calls the backend REST API. The backend stores data in SQLite and files on disk, and calls OpenAI when generation, chat, quiz, grading, or vision transcription is required.</p>
+
+<h3>4.3 Key Features</h3>
+<ul>
+  <li><strong>Deck management:</strong> Create, rename, delete, list; upload or replace study documents; remove document without deleting the deck.</li>
+  <li><strong>Material extraction:</strong> PDF text extraction (with vision fallback for sparse text), plain text/Markdown, image upload transcribed via vision model.</li>
+  <li><strong>Flashcards:</strong> Manual create/edit/delete; AI generation from deck material; SM-2 review (again / hard / good / easy).</li>
+  <li><strong>Learning chat:</strong> Threaded sessions per deck; AI replies using optional deck text as context.</li>
+  <li><strong>Quiz:</strong> Generate multiple-choice and short-answer questions; grade MC deterministically; grade short answers via AI.</li>
+  <li><strong>Statistics:</strong> Review-oriented charts with selectable time windows.</li>
+</ul>
+<p><em>[SCREENSHOT: Optional — collage of 2–3 UI tabs.]</em></p>
+
+<h2>5. Functional Requirements</h2>
+<table>
+  <tr><th>ID</th><th>Requirement</th></tr>
+  <tr><td>FR-01</td><td>The system shall allow the user to create a named deck (study container).</td></tr>
+  <tr><td>FR-02</td><td>The system shall allow uploading a new deck with an initial file in one step.</td></tr>
+  <tr><td>FR-03</td><td>The system shall list all decks with name, preview of content, and whether study material exists.</td></tr>
+  <tr><td>FR-04</td><td>The user shall open a deck and see its study filename and material preview context.</td></tr>
+  <tr><td>FR-05</td><td>The user shall upload or replace a study document (PDF, text/Markdown, common image types).</td></tr>
+  <tr><td>FR-06</td><td>The system shall extract text from PDFs using embedded text layers; if text is below a threshold, rasterize pages and transcribe via OpenAI vision.</td></tr>
+  <tr><td>FR-07</td><td>The system shall transcribe image uploads using an OpenAI vision-capable model.</td></tr>
+  <tr><td>FR-08</td><td>The user shall remove the attached document from a deck without deleting the deck.</td></tr>
+  <tr><td>FR-09</td><td>The user shall rename and delete a deck; deleting removes associated stored files as applicable.</td></tr>
+  <tr><td>FR-10</td><td>The user shall create flashcards manually (front and back).</td></tr>
+  <tr><td>FR-11</td><td>The system shall generate flashcards from deck study text via OpenAI, appending to existing cards.</td></tr>
+  <tr><td>FR-12</td><td>The user shall list, edit, and delete flashcards in a deck.</td></tr>
+  <tr><td>FR-13</td><td>The user shall submit a review rating (again, hard, good, easy) and the system shall update SM-2 fields and next review time.</td></tr>
+  <tr><td>FR-14</td><td>The user shall use learning chat per deck; assistant replies use deck material as optional context per product rules.</td></tr>
+  <tr><td>FR-15</td><td>The user shall list and delete chat sessions; list messages in a session.</td></tr>
+  <tr><td>FR-16</td><td>The user shall generate a mock quiz from deck material via OpenAI.</td></tr>
+  <tr><td>FR-17</td><td>The user shall submit quiz answers and receive a score (MC by index; short answers via AI).</td></tr>
+  <tr><td>FR-18</td><td>The system shall expose a health endpoint reporting readiness and OpenAI configuration.</td></tr>
+  <tr><td>FR-19</td><td>The UI shall provide tabs/sections for flashcards, chat, quiz, and statistics.</td></tr>
+  <tr><td>FR-20</td><td>Statistics shall support configurable time ranges and charts consistent with scheduling data.</td></tr>
+</table>
+<p><em>Traceability: requirements map to Appendix 13.1.</em></p>
+
+<h2>6. Non-Functional Requirements</h2>
+
+<h3>6.1 Performance Requirements</h3>
+<ul>
+  <li><strong>NFR-P1:</strong> Typical API operations should complete within a few hundred milliseconds on a modern PC with local SQLite.</li>
+  <li><strong>NFR-P2:</strong> OpenAI operations are bounded by network and model speed; the UI shall indicate loading state.</li>
+  <li><strong>NFR-P3:</strong> PDF vision fallback may cap pages to control cost and time.</li>
+</ul>
+
+<h3>6.2 Usability Requirements</h3>
+<ul>
+  <li><strong>NFR-U1:</strong> Clear labels for review buttons and deck actions.</li>
+  <li><strong>NFR-U2:</strong> Surface API errors to the user when requests fail.</li>
+</ul>
+
+<h3>6.3 Reliability Requirements</h3>
+<ul>
+  <li><strong>NFR-R1:</strong> Study data persists in SQLite across restarts.</li>
+  <li><strong>NFR-R2:</strong> Failed uploads should not leave inconsistent deck records when the API returns an error.</li>
+</ul>
+
+<h3>6.4 Security Requirements</h3>
+<ul>
+  <li><strong>NFR-S1:</strong> CORS restricted to configured origins unless changed for deployment.</li>
+  <li><strong>NFR-S2:</strong> API keys in server-side environment only.</li>
+</ul>
+
+<h3>6.5 Compatibility Requirements</h3>
+<ul>
+  <li><strong>NFR-C1:</strong> Modern evergreen browsers.</li>
+  <li><strong>NFR-C2:</strong> Python 3 with documented dependencies.</li>
+</ul>
+
+<h3>6.6 Maintainability Requirements</h3>
+<ul>
+  <li><strong>NFR-M1:</strong> Separation of routes, schemas, services, persistence.</li>
+  <li><strong>NFR-M2:</strong> Automated unit and API end-to-end tests for core flows.</li>
+</ul>
+
+<h3>6.7 Portability Requirements</h3>
+<ul>
+  <li><strong>NFR-P4:</strong> Runs on Windows/macOS/Linux for development with documented commands.</li>
+</ul>
+
+<h2>7. Interface Requirements</h2>
+
+<h3>7.1 User Interfaces</h3>
+<p>The client shall provide: deck picker and workspace; flashcard study with four review actions; learning chat with sessions and messages; quiz UI; statistics with range selection.</p>
+<p><em>[SCREENSHOT: Deck/toolbar] [SCREENSHOT: Flashcards] [SCREENSHOT: Chat] [SCREENSHOT: Quiz] [SCREENSHOT: Statistics]</em></p>
+
+<h3>7.2 Hardware Interfaces</h3>
+<p>Standard PC or laptop (keyboard, pointer, display). Microphone/camera not required.</p>
+
+<h3>7.3 Software Interfaces</h3>
+<ul>
+  <li><strong>Frontend ↔ Backend:</strong> JSON over HTTP REST (e.g. VITE_API_PROXY in dev).</li>
+  <li><strong>Backend ↔ OpenAI:</strong> HTTPS JSON API.</li>
+  <li><strong>Backend ↔ Filesystem:</strong> uploads under configured directory.</li>
+  <li><strong>Backend ↔ SQLite:</strong> async SQLAlchemy + aiosqlite.</li>
+</ul>
+
+<h3>7.4 Communication Interfaces</h3>
+<p>HTTP/HTTPS. Typical dev: frontend port 5173, backend 8080 (example).</p>
+
+<h2>8. System Architecture</h2>
+
+<h3>8.1 Architecture Overview</h3>
+<p>Layered: React UI → REST API (FastAPI) → services (LLM, document extraction, SM-2) → SQLAlchemy → SQLite; file storage for uploads.</p>
+<p><em>[SCREENSHOT: Optional architecture diagram.]</em></p>
+
+<h3>8.2 Component Architecture</h3>
+<ul>
+  <li><strong>Frontend:</strong> React + TypeScript + Vite.</li>
+  <li><strong>Backend:</strong> FastAPI routes; Pydantic validation.</li>
+  <li><strong>Services:</strong> OpenAI wrapper; PDF/image extraction; SM-2 review.</li>
+  <li><strong>Persistence:</strong> SQLAlchemy ORM; async sessions.</li>
+</ul>
+
+<h3>8.3 Data Flow</h3>
+<ol>
+  <li>User action → HTTP → handler → DB and/or OpenAI → JSON → UI.</li>
+  <li>File upload → disk → extract/transcribe → document row.</li>
+</ol>
+
+<h3>8.4 Technology Stack</h3>
+<p>See Section 11.</p>
+
+<h2>9. System Models and Diagrams</h2>
+
+<h3>9.1 Overview</h3>
+<p>Design views summarized here; UML/sequence diagrams omitted per project scope.</p>
+
+<h3>9.2 Architectural Design</h3>
+<h4>9.2.1 Rationale</h4>
+<p>SPA + separate API enables clear testing and local classroom deployment.</p>
+<h4>9.2.2 High-Level Data Flow</h4>
+<p><em>[SCREENSHOT: Same as 4.2 or 8.1 if one figure only.]</em></p>
+<p>User operations mutate state via REST; AI calls return content to store or display.</p>
+
+<h3>9.3 UML Diagrams</h3>
+<p>Not included in this SRS (sequence and UML diagrams omitted by scope). May be added in a future revision if required.</p>
+
+<h3>9.4 Non-Functional Considerations</h3>
+<p>Aligned with Sections 6 and 12; deployment assumed local/personal unless extended.</p>
+
+<h2>10. Database Design</h2>
+
+<h3>10.1 Database Schema</h3>
+<p><strong>documents:</strong> id (PK), name, filename, stored_path, content_text, created_at</p>
+<p><strong>flashcards:</strong> id (PK), document_id (FK), front, back, sort_order, sm2_* fields, created_at, source_document_name</p>
+<p><strong>chat_sessions:</strong> id (PK), document_id (FK), title, created_at, updated_at</p>
+<p><strong>chat_messages:</strong> id (PK), session_id (FK), document_id (FK), role, content, created_at</p>
+<p><em>[SCREENSHOT: Optional ER diagram.]</em></p>
+
+<h3>10.2 Indexes</h3>
+<p>SQLite PK/FK defaults; further indexes optional for scale-up.</p>
+
+<h2>11. Technology Stack</h2>
+
+<h3>11.1 Frontend Technologies</h3>
+<p>React 18, TypeScript, Vite, react-markdown where used.</p>
+
+<h3>11.2 Backend Technologies</h3>
+<p>Python 3, FastAPI, Uvicorn, SQLAlchemy 2 async + aiosqlite, Pydantic v2, PyMuPDF/pypdf, Pillow, OpenAI SDK.</p>
+
+<h3>11.3 Development and Deployment</h3>
+<p>npm for frontend; pip/requirements.txt + uvicorn for backend; <code>.env</code> for keys; optional <code>STUDY_ASSISTANT_DATA_DIR</code> for tests.</p>
+
+<h3>11.4 Hosting and Deployment</h3>
+<p>Local development described; production (HTTPS, reverse proxy) future work.</p>
+
+<h2>12. Security Requirements</h2>
+
+<h3>12.1 Authentication Security</h3>
+<p>No user authentication in described version; network deployment should add auth + TLS.</p>
+
+<h3>12.2 Authorization Security</h3>
+<p>No RBAC; trusted client origin.</p>
+
+<h3>12.3 Data Security</h3>
+<p>Keys not in source control; study data local — user responsible for device security.</p>
+
+<h3>12.4 Input Validation</h3>
+<p>Pydantic validates JSON; uploads validated server-side.</p>
+
+<h2>13. Appendix</h2>
+
+<h3>13.1 API Endpoint Summary</h3>
+<table>
+  <tr><th>Method</th><th>Path (prefix /api)</th><th>Purpose</th></tr>
+  <tr><td>GET</td><td>/health</td><td>Liveness + OpenAI configured</td></tr>
+  <tr><td>POST</td><td>/decks</td><td>Create empty deck</td></tr>
+  <tr><td>POST</td><td>/decks/upload</td><td>Create deck from file</td></tr>
+  <tr><td>GET</td><td>/decks</td><td>List decks</td></tr>
+  <tr><td>GET</td><td>/decks/{deck_id}</td><td>Get deck</td></tr>
+  <tr><td>PUT</td><td>/decks/{deck_id}</td><td>Rename</td></tr>
+  <tr><td>DELETE</td><td>/decks/{deck_id}</td><td>Delete deck</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/document</td><td>Upload/replace document</td></tr>
+  <tr><td>DELETE</td><td>/decks/{deck_id}/document</td><td>Remove document</td></tr>
+  <tr><td>GET</td><td>/decks/{deck_id}/flashcards</td><td>List flashcards</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/flashcards</td><td>Create flashcard</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/flashcards/generate</td><td>AI generate</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/flashcards/{fc_id}/review</td><td>SM-2 review</td></tr>
+  <tr><td>PUT</td><td>/decks/{deck_id}/flashcards/{fc_id}</td><td>Update</td></tr>
+  <tr><td>DELETE</td><td>/decks/{deck_id}/flashcards/{fc_id}</td><td>Delete</td></tr>
+  <tr><td>GET</td><td>/decks/{deck_id}/chat/sessions</td><td>List sessions</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/chat/sessions</td><td>Create session</td></tr>
+  <tr><td>DELETE</td><td>/decks/{deck_id}/chat/sessions/{session_id}</td><td>Delete session</td></tr>
+  <tr><td>GET</td><td>/decks/{deck_id}/chat/sessions/{session_id}/messages</td><td>List messages</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/chat/sessions/{session_id}/messages</td><td>Send message</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/quiz/generate</td><td>Generate quiz</td></tr>
+  <tr><td>POST</td><td>/decks/{deck_id}/quiz/grade</td><td>Grade quiz</td></tr>
+</table>
+
+<h3>13.2 Glossary</h3>
+<ul>
+  <li><strong>Deck:</strong> Study container (document) with material, flashcards, chats.</li>
+  <li><strong>Vision transcription:</strong> Image → text via a multimodal model.</li>
+  <li><strong>Mock quiz:</strong> Practice test from deck material, not a proctored exam.</li>
+</ul>
+
+<p style="margin-top:2em;"><strong>— End of SRS —</strong></p>
+
+</body>
+</html>
