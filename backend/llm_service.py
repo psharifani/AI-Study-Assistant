@@ -262,9 +262,8 @@ Rules:
 - Do not describe the image. Do not translate unless the user language is mixed; keep original language."""
 
 
-def _image_to_data_url_jpeg(path: Path) -> str:
-    """Resize very large photos and normalize to JPEG for the Vision API."""
-    raw = path.read_bytes()
+def _image_bytes_to_data_url_jpeg(raw: bytes) -> str:
+    """Normalize image bytes to a JPEG data URL for the Vision API."""
     if len(raw) > 32 * 1024 * 1024:
         raise ValueError("Image file is too large (max ~32 MB). Try a smaller or cropped photo.")
 
@@ -300,17 +299,15 @@ def _image_to_data_url_jpeg(path: Path) -> str:
     return f"data:image/jpeg;base64,{b64}"
 
 
-async def transcribe_image_file(path: Path) -> str:
-    """Extract text from an image (printed or handwriting) via OpenAI vision."""
+def _image_to_data_url_jpeg(path: Path) -> str:
+    """Resize very large photos and normalize to JPEG for the Vision API."""
+    return _image_bytes_to_data_url_jpeg(path.read_bytes())
+
+
+async def _transcribe_image_data_url(data_url: str) -> str:
+    """Single vision call: image data URL → transcribed text."""
     client, _ = _openai()
     vision_model = get_openai_vision_model()
-    try:
-        data_url = _image_to_data_url_jpeg(path)
-    except (OSError, ValueError, Image.UnidentifiedImageError) as e:
-        if isinstance(e, ValueError):
-            raise
-        raise ValueError("Could not read this file as an image.") from e
-
     resp = await client.chat.completions.create(
         model=vision_model,
         messages=[
@@ -330,3 +327,63 @@ async def transcribe_image_file(path: Path) -> str:
     if not text or text == "(no text detected)":
         return "[No text detected in image]"
     return text
+
+
+async def transcribe_image_bytes(image_bytes: bytes) -> str:
+    """Transcribe a single image given raw bytes (e.g. rendered PDF page)."""
+    try:
+        data_url = _image_bytes_to_data_url_jpeg(image_bytes)
+    except (OSError, ValueError, Image.UnidentifiedImageError) as e:
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError("Could not read image bytes.") from e
+    return await _transcribe_image_data_url(data_url)
+
+
+async def transcribe_image_file(path: Path) -> str:
+    """Extract text from an image file (printed or handwriting) via OpenAI vision."""
+    try:
+        data_url = _image_to_data_url_jpeg(path)
+    except (OSError, ValueError, Image.UnidentifiedImageError) as e:
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError("Could not read this file as an image.") from e
+    return await _transcribe_image_data_url(data_url)
+
+
+async def transcribe_pdf_pages_vision(path: Path, max_pages: int = 25) -> str:
+    """
+    Rasterize PDF pages and transcribe each with the same vision model as images.
+    Used when embedded PDF text extraction yields too little text (scanned / handwriting).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as e:
+        raise RuntimeError("PyMuPDF is required for PDF vision fallback.") from e
+
+    try:
+        doc = fitz.open(path)
+    except Exception as e:
+        raise ValueError(f"Could not open PDF: {e}") from e
+
+    try:
+        n = len(doc)
+        if n == 0:
+            return ""
+        limit = min(n, max_pages)
+        parts: list[str] = []
+        # ~144 dpi for readable handwriting; keeps images reasonable after JPEG resize
+        matrix = fitz.Matrix(2.0, 2.0)
+        for i in range(limit):
+            page = doc[i]
+            pix = page.get_pixmap(matrix=matrix, alpha=False)
+            png_bytes = pix.tobytes("png")
+            page_text = await transcribe_image_bytes(png_bytes)
+            if page_text and page_text != "[No text detected in image]":
+                parts.append(f"--- Page {i + 1} ---\n{page_text}")
+        out = "\n\n".join(parts).strip()
+        if n > max_pages and out:
+            out += f"\n\n[Note: Only the first {max_pages} of {n} pages were transcribed with vision.]"
+        return out
+    finally:
+        doc.close()

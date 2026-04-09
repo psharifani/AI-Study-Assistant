@@ -5,6 +5,9 @@ from pypdf import PdfReader
 # Image uploads: transcribed via OpenAI Vision in extract_text_from_file_async.
 IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif"})
 
+# If embedded PDF text is shorter than this, try vision on rasterized pages (scans / handwriting).
+PDF_VISION_FALLBACK_MIN_CHARS = 40
+
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -79,12 +82,18 @@ def _extract_pdf_pypdf_fallback(path: Path) -> str:
     return "\n\n".join(parts).strip()
 
 
+def _extract_pdf_text_layer_only(path: Path) -> str:
+    """Embedded text only (no vision). Used for sync extract and to decide vision fallback."""
+    text = _extract_pdf_pymupdf_column_aware(path)
+    if not text:
+        text = _extract_pdf_pypdf_fallback(path)
+    return text.strip()
+
+
 def extract_text_from_file(path: Path, original_filename: str) -> str:
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        text = _extract_pdf_pymupdf_column_aware(path)
-        if not text:
-            text = _extract_pdf_pypdf_fallback(path)
+        text = _extract_pdf_text_layer_only(path)
         return text or "[No extractable text from PDF]"
     if suffix in (".txt", ".md", ".markdown"):
         return path.read_text(encoding="utf-8", errors="replace").strip()
@@ -95,10 +104,22 @@ def extract_text_from_file(path: Path, original_filename: str) -> str:
 
 
 async def extract_text_from_file_async(path: Path, original_filename: str) -> str:
-    """Like extract_text_from_file, but awaits vision transcription for image types."""
+    """Like extract_text_from_file, but image uploads and sparse PDFs use OpenAI vision."""
     suffix = path.suffix.lower()
     if suffix in IMAGE_EXTENSIONS:
         from llm_service import transcribe_image_file
 
         return await transcribe_image_file(path)
+    if suffix == ".pdf":
+        raw = _extract_pdf_text_layer_only(path)
+        if len(raw) >= PDF_VISION_FALLBACK_MIN_CHARS:
+            return raw
+        if fitz is None:
+            return raw if raw else "[No extractable text from PDF]"
+        from llm_service import transcribe_pdf_pages_vision
+
+        vision_text = (await transcribe_pdf_pages_vision(path) or "").strip()
+        if vision_text:
+            return vision_text
+        return raw if raw else "[No extractable text from PDF]"
     return extract_text_from_file(path, original_filename)
