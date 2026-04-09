@@ -95,7 +95,7 @@ async def upload_new_deck(
     if not file.filename:
         raise HTTPException(400, "Missing filename")
     safe_name = Path(file.filename).name
-    stored = UPLOADS_DIR / f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{safe_name}"
+    stored = UPLOADS_DIR / f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{safe_name}"
     try:
         with stored.open("wb") as f:
             shutil.copyfileobj(file.file, f)
@@ -139,7 +139,7 @@ async def upload_deck_document(
                 p.unlink()
             except OSError:
                 pass
-    stored = UPLOADS_DIR / f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{safe_name}"
+    stored = UPLOADS_DIR / f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{safe_name}"
     try:
         with stored.open("wb") as f:
             shutil.copyfileobj(file.file, f)

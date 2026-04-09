@@ -23,8 +23,10 @@ def get_openai_vision_model() -> str:
     return (os.getenv("OPENAI_VISION_MODEL") or "gpt-4o-mini").strip()
 
 
-OPENAI_API_KEY, OPENAI_MODEL = get_openai_credentials()
-
-DATA_DIR = Path(__file__).resolve().parent / "data"
+# Set STUDY_ASSISTANT_DATA_DIR in the environment before importing this module (e.g. API end-to-end tests).
+_data_override = (os.environ.get("STUDY_ASSISTANT_DATA_DIR") or "").strip()
+DATA_DIR = Path(_data_override) if _data_override else _backend_dir / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 DATABASE_URL = f"sqlite+aiosqlite:///{DATA_DIR / 'study_assistant.db'}"
+
+OPENAI_API_KEY, OPENAI_MODEL = get_openai_credentials()

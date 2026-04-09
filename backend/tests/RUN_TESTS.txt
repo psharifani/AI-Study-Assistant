@@ -1,0 +1,6 @@
+Unit tests only (stdlib unittest, no pytest):
+
+  cd backend
+  python -m unittest discover -s tests -v
+
+End-to-end API tests live in ../e2e/ — see e2e/RUN_E2E.txt

@@ -1,0 +1,16 @@
+End-to-end API tests only (not part of `python -m unittest discover -s tests`).
+
+From the backend directory:
+
+  python -m unittest e2e.test_api_e2e -v
+
+Journeys covered (5):
+1. Health + deck + upload/rename/remove document + delete deck
+2. Flashcards: create, list, review (SM-2), update, delete
+3. AI flashcard generation (OpenAI mocked)
+4. Quiz: generate + grade multiple-choice (generate mocked; grading uses rules, no LLM)
+5. Learning chat: session, send message (OpenAI mocked), list messages/sessions, delete session
+
+Or:
+
+  python -m e2e.test_api_e2e
